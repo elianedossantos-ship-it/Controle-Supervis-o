@@ -36,6 +36,7 @@ export const NAVEGACAO: GrupoNav[] = [
       { href: '/cadastros/contratos', rotulo: 'Contratos', exige: 'coordenador' },
       { href: '/cadastros/carteira', rotulo: 'Carteira', exige: 'coordenador' },
       { href: '/cadastros/feriados', rotulo: 'Feriados', exige: 'coordenador' },
+      { href: '/cadastros/importacao', rotulo: 'Importar REG-061', exige: 'coordenador' },
     ],
   },
 ];

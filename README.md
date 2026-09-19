@@ -8,18 +8,21 @@ O dado primário é **a visita por data**, não a célula de uma grade mensal. A
 programação semanal é a janela de edição; o REG-061 mensal passa a ser uma
 exportação gerada a partir das visitas.
 
-## Estado atual: Entrega 1 — Fundação
+## Estado atual
 
-Esta entrega é a base. As telas entram nas próximas, uma por vez.
-
-| Item | Situação |
-| --- | --- |
-| Projeto, Tailwind, shadcn/ui, Postgres via Drizzle | pronto |
-| Schema e migrations das 20 tabelas | pronto |
-| Seed: 12 motivos de cancelamento + usuário admin | pronto |
-| Autenticação: login, logout, sessão e `requireRole()` | pronto |
-| Layout base com navegação por papel | pronto |
-| Cadastros, carteira, montagem da semana, Meu dia, painel, exportação | próximas entregas |
+| Entrega | Item | Situação |
+| --- | --- | --- |
+| 1 | Projeto, Tailwind, shadcn/ui, Postgres via Drizzle | pronto |
+| 1 | Schema e migrations das 20 tabelas | pronto |
+| 1 | Seed: 12 motivos de cancelamento + usuário admin | pronto |
+| 1 | Autenticação: login, logout, sessão e `requireRole()` | pronto |
+| 1 | Layout base com navegação por papel | pronto |
+| 2 | Cadastro de supervisores, com reset de senha e inativação | pronto |
+| 2 | Cadastro de contratos, com os contatos do cliente | pronto |
+| 2 | Cadastro de feriados | pronto |
+| 2 | Carteira: mover contrato preservando o histórico | pronto |
+| 2 | Importação inicial do REG-061 em Excel | pronto |
+| 3+ | Montagem da semana, Meu dia, painel, prazos, avaliações, exportação | próximas entregas |
 
 As rotas das telas futuras já existem e já respeitam o papel, mas exibem apenas
 um aviso de "próxima entrega".
@@ -67,7 +70,12 @@ npm run dev
   (app)/                    área autenticada, com o layout e a navegação por papel
     meu-dia  programacao  prazos
     painel  avaliacoes  exportar
-    cadastros/{supervisores,contratos,carteira,feriados}
+    cadastros/
+      supervisores/         lista, novo, editar, reset de senha
+      contratos/            lista, novo, editar (com os contatos do cliente)
+      carteira/             supervisores à esquerda, contratos à direita
+      feriados/             lista e inclusão
+      importacao/           carga inicial a partir do REG-061 em Excel
   sem-acesso                papel não alcança a tela pedida
 /db
   schema.ts                 as 20 tabelas
@@ -79,6 +87,10 @@ npm run dev
   papeis.ts                 papéis e hierarquia
   senha.ts                  hash e conferência (bcrypt)
   navegacao.ts              itens de menu e o papel mínimo de cada um
+  formulario.ts             estado devolvido pelas server actions de cadastro
+  datas.ts                  DATE do Postgres sem deslocar o dia por fuso
+  contratos.ts  feriados.ts  uf.ts    listas fechadas do domínio
+  importacao-reg061.ts      leitura da planilha REG-061
 proxy.ts                    barreira de sessão (o "middleware" do Next 16)
 ```
 
@@ -97,6 +109,53 @@ também por coordenador e admin.
 entra na tela. O isolamento por carteira é regra de consulta: toda busca de
 visita feita por um supervisor filtra por `supervisor_id` no backend. Isso vale
 a partir da entrega que trouxer as consultas de visita.
+
+## Cadastros e carteira
+
+**Quem faz o quê.** A seção 2 do escopo dá ao coordenador "cadastrar
+supervisores, contratos, contatos e feriados", e ao admin "gestão de usuários,
+reset de senha e inativação". A leitura aplicada foi:
+
+| Ação | Coordenador | Admin |
+| --- | --- | --- |
+| Criar usuário e editar nome, e-mail, telefone e WhatsApp | sim | sim |
+| Alterar o papel de um usuário | não | sim |
+| Inativar ou reativar um usuário | não | sim |
+| Redefinir senha | não | sim |
+| Contratos, contatos, feriados, carteira e importação | sim | sim |
+
+Os campos travados vão desabilitados na tela **e** recusados no servidor: uma
+tentativa de editar o formulário no navegador e promover alguém a admin volta
+com erro e não altera o banco.
+
+Três travas protegem o acesso de quem administra: ninguém altera o próprio
+papel nem a própria situação, e o último admin ativo não pode ser rebaixado
+nem inativado — senão o sistema ficaria sem quem desfaça.
+
+**Carteira.** Mover um contrato roda numa transação: fecha o vínculo vigente
+com `fim = hoje` e abre o novo. O anterior nunca é apagado nem reescrito, então
+o histórico fica de pé. Fora da transação, fechar sem abrir deixaria o contrato
+órfão e abrir sem fechar bateria no índice `carteira_vigente_unica`. Contrato
+sem supervisor aparece em destaque no grupo "Sem supervisor", e supervisor
+inativo some da tela — contrato não vai para quem não acessa o sistema.
+
+**Importação do REG-061.** Tem dois passos, e o primeiro não grava nada. A
+leitura não assume posição fixa de célula: procura a linha de cabeçalho pelo
+rótulo CLIENTE e o supervisor pelo rótulo SUPERVISOR acima dele, caindo no nome
+da aba quando o rótulo não existe. Isso porque a planilha é preenchida à mão e
+a altura do cabeçalho varia de aba para aba.
+
+A conferência mostra, linha a linha, o que vai ser criado, o que já existe e o
+que será ignorado, com o motivo. Não importa linha sem endereço nem com
+periodicidade fora da lista; normaliza grafias como "2x semana" e "Quinzenal";
+descarta a legenda do rodapé; e marca repetição dentro da própria planilha.
+Contrato cujo supervisor não está cadastrado (ou está inativo) entra sem
+carteira, e a tela avisa. Reimportar o mesmo arquivo não duplica nada.
+
+**UF.** O banco guarda `CHAR(2)`, mas o sistema só aceita uma das 27 siglas
+reais, por seletor. Aceitar qualquer par de letras criaria furo silencioso:
+feriado estadual com UF inexistente nunca casaria com contrato nenhum e o dia
+seguiria aberto para programação.
 
 ## Segurança da sessão
 
