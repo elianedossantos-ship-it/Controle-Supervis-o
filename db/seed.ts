@@ -1,0 +1,126 @@
+import 'dotenv/config';
+import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { hashSenha } from '../lib/senha';
+import { motivosCancelamento, usuarios } from './schema';
+
+/**
+ * Lista fechada da seção 4.3 do escopo. Fica em tabela, e não em código, para a
+ * coordenação incluir ou aposentar itens sem depender de deploy — o seed só
+ * garante a carga inicial.
+ */
+const MOTIVOS = [
+  {
+    ordem: 1,
+    descricao: 'Entrega de benefícios em outro contrato não previsto na rota',
+    categoria: 'logistica',
+  },
+  {
+    ordem: 2,
+    descricao: 'Entrega de uniformes em outro contrato não previsto na rota',
+    categoria: 'logistica',
+  },
+  {
+    ordem: 3,
+    descricao: 'Demanda administrativa — prévia de pagamento',
+    categoria: 'administrativo',
+  },
+  {
+    ordem: 4,
+    descricao:
+      'Demanda administrativa — atualização de mapa de frequência / RPA / solicitação de uniforme',
+    categoria: 'administrativo',
+  },
+  {
+    ordem: 5,
+    descricao: 'Demanda administrativa — atualização Flit',
+    categoria: 'administrativo',
+  },
+  {
+    ordem: 6,
+    descricao: 'Demanda administrativa — erros de pagamento / benefícios',
+    categoria: 'administrativo',
+  },
+  {
+    ordem: 7,
+    descricao: 'Demanda administrativa — plano de trabalho',
+    categoria: 'administrativo',
+  },
+  { ordem: 8, descricao: 'Veículo em manutenção', categoria: 'logistica' },
+  { ordem: 9, descricao: 'Remarcado pelo cliente', categoria: 'cliente' },
+  { ordem: 10, descricao: 'Reunião com a Coordenação', categoria: 'administrativo' },
+  { ordem: 11, descricao: 'Trânsito / deslocamento', categoria: 'logistica' },
+  {
+    ordem: 12,
+    descricao: 'Outro',
+    categoria: 'outro',
+    exigeTexto: true,
+  },
+] as const;
+
+async function main() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL não definida. Copie .env.example para .env.');
+  }
+
+  const cliente = postgres(process.env.DATABASE_URL, { max: 1 });
+  const db = drizzle(cliente);
+
+  try {
+    // Motivos de cancelamento --------------------------------------------------
+    const jaCadastrados = await db
+      .select({ descricao: motivosCancelamento.descricao })
+      .from(motivosCancelamento);
+    const existentes = new Set(jaCadastrados.map((m) => m.descricao));
+
+    const novos = MOTIVOS.filter((m) => !existentes.has(m.descricao)).map((m) => ({
+      descricao: m.descricao,
+      categoria: m.categoria,
+      ordem: m.ordem,
+      exigeTexto: 'exigeTexto' in m ? m.exigeTexto : false,
+    }));
+
+    if (novos.length > 0) {
+      await db.insert(motivosCancelamento).values(novos);
+      console.log(`Motivos de cancelamento inseridos: ${novos.length}`);
+    } else {
+      console.log('Motivos de cancelamento já cadastrados — nada a fazer.');
+    }
+
+    // Usuário admin ------------------------------------------------------------
+    const nome = process.env.SEED_ADMIN_NOME ?? 'Administrador';
+    const email = (process.env.SEED_ADMIN_EMAIL ?? 'admin@empresa.com.br').toLowerCase();
+    const senha = process.env.SEED_ADMIN_SENHA;
+
+    if (!senha) {
+      throw new Error(
+        'SEED_ADMIN_SENHA não definida. Defina no .env antes de rodar o seed.',
+      );
+    }
+
+    const [admin] = await db
+      .select({ id: usuarios.id })
+      .from(usuarios)
+      .where(eq(usuarios.email, email));
+
+    if (admin) {
+      console.log(`Admin ${email} já existe — senha preservada.`);
+    } else {
+      await db.insert(usuarios).values({
+        nome,
+        email,
+        senhaHash: await hashSenha(senha),
+        papel: 'admin',
+      });
+      console.log(`Admin criado: ${email}`);
+    }
+  } finally {
+    await cliente.end();
+  }
+}
+
+main().catch((erro) => {
+  console.error('Falha no seed:', erro);
+  process.exit(1);
+});
