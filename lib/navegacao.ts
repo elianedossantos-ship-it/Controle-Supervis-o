@@ -24,6 +24,7 @@ export const NAVEGACAO: GrupoNav[] = [
       { href: '/meu-dia', rotulo: 'Meu dia', exige: 'supervisor' },
       { href: '/programacao', rotulo: 'Programação', exige: 'supervisor' },
       { href: '/prazos', rotulo: 'Prazos', exige: 'supervisor' },
+      { href: '/planos', rotulo: 'Planos de ação', exige: 'supervisor' },
       { href: '/painel', rotulo: 'Painel', exige: 'coordenador' },
       { href: '/avaliacoes', rotulo: 'Avaliações', exige: 'coordenador' },
       { href: '/exportar', rotulo: 'Exportar REG-061', exige: 'coordenador' },

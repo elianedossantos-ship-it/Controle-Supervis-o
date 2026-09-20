@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { formatarDataHora } from '@/lib/datas';
 import { PainelRegistro } from './registrar';
 import { PainelCancelamento } from './cancelar';
+import { PlanosDaVisita } from './planos-da-visita';
 import type { DadosMeuDia, VisitaDoDia } from './acoes';
 
 const ROTULO_ORIGEM: Record<string, string> = {
@@ -30,12 +31,15 @@ export function ListaDeVisitas({
     null,
   );
   const [detalhes, setDetalhes] = useState<string | null>(null);
+  // Aberto logo após registrar: "precisa abrir plano de ação?" (seção 10.1).
+  const [perguntarPlano, setPerguntarPlano] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col gap-4">
       {dados.visitas.map((v) => {
         const aberto = painel?.id === v.id ? painel.tipo : null;
         const principal = v.contatos.find((c) => c.principal) ?? v.contatos[0];
+        const planosAbertos = dados.planosAbertos[v.contratoId] ?? 0;
 
         return (
           <article key={v.id} className="rounded-lg border p-4">
@@ -62,6 +66,13 @@ export function ListaDeVisitas({
                 {v.status === 'realizada' ? <Badge>Realizada</Badge> : null}
                 {v.status === 'cancelada' ? (
                   <Badge variant="destructive">Cancelada</Badge>
+                ) : null}
+                {/* Selo antes de o supervisor chegar na unidade (seção 10.4) */}
+                {planosAbertos > 0 ? (
+                  <Badge variant="destructive">
+                    {planosAbertos} plano{planosAbertos === 1 ? '' : 's'} aberto
+                    {planosAbertos === 1 ? '' : 's'}
+                  </Badge>
                 ) : null}
               </div>
             </div>
@@ -139,7 +150,26 @@ export function ListaDeVisitas({
             )}
 
             {aberto === 'registro' ? (
-              <PainelRegistro visitaId={v.id} onFechar={() => setPainel(null)} />
+              <PainelRegistro
+                visitaId={v.id}
+                onFechar={() => setPainel(null)}
+                onRegistrada={() => setPerguntarPlano(v.id)}
+              />
+            ) : null}
+
+            {/*
+              Os planos abertos da unidade aparecem antes de qualquer ação, e a
+              pergunta do plano vem logo depois do registro da visita.
+            */}
+            {(planosAbertos > 0 && podeAgir && v.status === 'prevista') ||
+            perguntarPlano === v.id ? (
+              <PlanosDaVisita
+                contratoId={v.contratoId}
+                contratoNome={v.contratoNome}
+                visitaId={v.id}
+                perguntar={perguntarPlano === v.id}
+                onDispensar={() => setPerguntarPlano(null)}
+              />
             ) : null}
 
             {aberto === 'cancelar' ? (

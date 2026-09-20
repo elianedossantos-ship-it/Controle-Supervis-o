@@ -63,6 +63,8 @@ export type DemandaAberta = {
 
 export type DadosMeuDia = {
   dia: string;
+  /** Planos de ação abertos por contrato — vira selo no cartão da visita. */
+  planosAbertos: Record<string, number>;
   supervisorId: string;
   supervisorNome: string;
   demandas: DemandaAberta[];
@@ -186,8 +188,12 @@ export async function carregarMeuDia(
     .where(eq(motivosCancelamento.ativo, true))
     .orderBy(asc(motivosCancelamento.ordem));
 
+  const { planosAbertosPorContrato } = await import('@/app/(app)/planos/acoes');
+  const planosAbertos = await planosAbertosPorContrato(contratoIds);
+
   return {
     dia,
+    planosAbertos,
     supervisorId: supervisor.id,
     supervisorNome: supervisor.nome,
     demandas,

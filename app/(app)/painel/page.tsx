@@ -195,6 +195,110 @@ export default async function PaginaPainel({ searchParams }: Props) {
         </div>
       </section>
 
+      {/* Planos de ação (seção 10.4) */}
+      <section className="mb-8">
+        <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Bloco
+            rotulo="Planos em aberto"
+            valor={String(d.planos.abertos + d.planos.emAndamento)}
+            marca={`${d.planos.emAndamento} já em andamento`}
+            apoio={`${d.planos.total} aberto${d.planos.total === 1 ? '' : 's'} no período`}
+          />
+          <Bloco
+            rotulo="Planos vencidos"
+            valor={String(d.planos.vencidos)}
+            severidade={d.planos.vencidos === 0 ? 'bom' : 'critico'}
+            marca={d.planos.vencidos === 0 ? 'nenhum passou do prazo' : 'passaram do prazo'}
+          />
+          <Bloco
+            rotulo="Tempo médio até resolver"
+            valor={formatarDuracao(d.planos.horasMediaAteResolver)}
+            apoio={`${d.planos.resolvidos} resolvido${d.planos.resolvidos === 1 ? '' : 's'}, ${d.planos.cancelados} cancelado${d.planos.cancelados === 1 ? '' : 's'}`}
+          />
+          <Bloco
+            rotulo="Contratos reincidentes"
+            valor={String(d.planos.contratosReincidentes)}
+            severidade={d.planos.contratosReincidentes === 0 ? 'bom' : 'critico'}
+            marca={
+              d.planos.contratosReincidentes === 0
+                ? 'nenhum repetiu no período'
+                : 'mais de um plano no período'
+            }
+          />
+        </div>
+
+        <div className="grid items-start gap-6 lg:grid-cols-2">
+          <div className="bg-card rounded-lg border p-5">
+            <h2 className="mb-1 font-semibold">Planos por contrato</h2>
+            <p className="text-muted-foreground mb-4 text-sm">
+              Ranqueado pelo que ainda cobra. O plano pertence ao contrato: a unidade que
+              repete é a que precisa de outra conversa.
+            </p>
+            <BarrasRanqueadas
+              titulo="Planos de ação por contrato, ranqueado"
+              unidade="plano"
+              rotuloDetalhe="situação"
+              vazio="Nenhum plano de ação no período."
+              itens={d.planos.porContrato.map((c) => ({
+                rotulo: c.nome,
+                valor: c.total,
+                percentual: d.planos.total === 0 ? 0 : (c.total / d.planos.total) * 100,
+                detalhe: `${c.abertos} em aberto${c.vencidos > 0 ? `, ${c.vencidos} vencido${c.vencidos === 1 ? '' : 's'}` : ''}`,
+              }))}
+            />
+          </div>
+
+          <div className="bg-card rounded-lg border p-5">
+            <h2 className="mb-1 font-semibold">Planos por supervisor</h2>
+            <p className="text-muted-foreground mb-4 text-sm">
+              Quem abriu o plano. Muitos planos não é demérito — é olho na unidade; o que
+              pesa é a coluna de vencidos.
+            </p>
+
+            {d.planos.porSupervisor.length === 0 ? (
+              <Vazio>Nenhum plano de ação no período.</Vazio>
+            ) : (
+              <Table data-tabela="planos-por-supervisor">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Supervisor</TableHead>
+                    <TableHead className="text-right">Abertos no período</TableHead>
+                    <TableHead className="text-right">Ainda cobrando</TableHead>
+                    <TableHead className="text-right">Vencidos</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {d.planos.porSupervisor.map((s) => (
+                    <TableRow key={s.nome}>
+                      <TableCell className="font-medium">{s.nome}</TableCell>
+                      <TableCell className="text-right tabular-nums">{s.total}</TableCell>
+                      <TableCell className="text-right tabular-nums">{s.abertos}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {s.vencidos > 0 ? (
+                          <Badge variant="destructive">{s.vencidos}</Badge>
+                        ) : (
+                          '0'
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+
+            {d.planos.reincidentes.length > 0 ? (
+              <p className="text-muted-foreground mt-4 text-sm">
+                Reincidência no período:{' '}
+                {d.planos.reincidentes
+                  .map((r) => `${r.nome} (${r.total})`)
+                  .join(', ')}
+                .
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Bloco rotulo="Demandas abertas" valor={String(d.demandas.abertas)} />
         <Bloco rotulo="Demandas concluídas" valor={String(d.demandas.concluidas)} />

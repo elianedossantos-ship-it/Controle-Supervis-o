@@ -20,10 +20,14 @@ export function BarrasRanqueadas({
   itens,
   titulo,
   unidade = 'cancelamento',
+  rotuloDetalhe = 'categoria',
+  vazio,
 }: {
   itens: ItemBarra[];
   titulo: string;
   unidade?: string;
+  rotuloDetalhe?: string;
+  vazio?: string;
 }) {
   const [emFoco, setEmFoco] = useState<number | null>(null);
   const maximo = Math.max(...itens.map((i) => i.valor), 1);
@@ -31,7 +35,7 @@ export function BarrasRanqueadas({
   if (itens.length === 0) {
     return (
       <div className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-        Nenhum cancelamento no período.
+        {vazio ?? 'Nenhum cancelamento no período.'}
       </div>
     );
   }
@@ -75,7 +79,9 @@ export function BarrasRanqueadas({
                 do total
               </p>
               {item.detalhe ? (
-                <p className="text-muted-foreground">categoria: {item.detalhe}</p>
+                <p className="text-muted-foreground">
+                  {rotuloDetalhe}: {item.detalhe}
+                </p>
               ) : null}
             </div>
           ) : null}

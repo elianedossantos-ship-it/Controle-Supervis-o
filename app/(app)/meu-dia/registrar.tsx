@@ -17,9 +17,11 @@ type Localizacao =
 export function PainelRegistro({
   visitaId,
   onFechar,
+  onRegistrada,
 }: {
   visitaId: string;
   onFechar: () => void;
+  onRegistrada?: () => void;
 }) {
   const [estado, enviar] = useActionState<EstadoForm, FormData>(registrarRealizada, {});
   const [local, setLocal] = useState<Localizacao>({ estado: 'procurando' });
@@ -80,8 +82,11 @@ export function PainelRegistro({
   // Fechar é efeito colateral: chamar o setState do pai durante a renderização
   // é justamente o que o React manda não fazer.
   useEffect(() => {
-    if (estado.ok) onFechar();
-  }, [estado.ok, onFechar]);
+    if (!estado.ok) return;
+    onFechar();
+    // Logo depois do registro vem a pergunta do plano de ação (seção 10.1).
+    onRegistrada?.();
+  }, [estado.ok, onFechar, onRegistrada]);
 
   return (
     <form action={enviar} className="bg-muted/40 mt-3 flex flex-col gap-4 rounded-lg border p-4">

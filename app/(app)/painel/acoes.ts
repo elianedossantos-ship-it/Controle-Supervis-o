@@ -10,6 +10,7 @@ import {
   motivosCancelamento,
   obrigacaoOcorrencias,
   obrigacoes,
+  planosAcao,
   usuarios,
   visitas,
 } from '@/db/schema';
@@ -22,6 +23,14 @@ import {
   type CumprimentoPrazos,
   type StatusOcorrencia,
 } from '@/lib/prazos';
+import {
+  estaAberto,
+  estaVencido,
+  resumirPlanos,
+  type Prioridade,
+  type ResumoPlanos,
+  type StatusPlano,
+} from '@/lib/planos';
 import {
   aderencia,
   cumprimentoDaPeriodicidade,
@@ -48,6 +57,16 @@ export type LinhaAderencia = {
   extrasRealizadas: number;
   canceladas: number;
   aderencia: number | null;
+};
+
+export type LinhaPlanos = {
+  nome: string;
+  total: number;
+  /** Ainda cobrando: aberto ou em andamento. */
+  abertos: number;
+  vencidos: number;
+  /** Total sem os cancelados — é o que conta para reincidência. */
+  validos: number;
 };
 
 export type Cancelamento = {
@@ -97,6 +116,12 @@ export type DadosPainel = {
   prazos: CumprimentoPrazos & {
     emAtraso: number;
     porObrigacao: { nome: string; cumprimento: CumprimentoPrazos }[];
+  };
+  planos: ResumoPlanos & {
+    total: number;
+    porContrato: LinhaPlanos[];
+    porSupervisor: LinhaPlanos[];
+    reincidentes: { nome: string; total: number; abertos: number }[];
   };
   supervisores: { id: string; nome: string }[];
   contratos: { id: string; nome: string }[];
@@ -325,6 +350,71 @@ export async function carregarPainel(f: Filtros): Promise<DadosPainel> {
     })),
   };
 
+  /*
+   * Planos de ação (seção 10.4). O recorte é pela abertura do plano, como nas
+   * demandas: o painel mede o período, e a tela /planos mostra o que está em
+   * aberto hoje, venha de quando vier.
+   */
+  const condicoesPlanos = [
+    gte(sql`${planosAcao.criadoEm}::date`, f.periodo.inicio),
+    lte(sql`${planosAcao.criadoEm}::date`, f.periodo.fim),
+  ];
+  if (f.supervisorId) condicoesPlanos.push(eq(planosAcao.abertoPor, f.supervisorId));
+  if (f.contratoId) condicoesPlanos.push(eq(planosAcao.contratoId, f.contratoId));
+
+  const linhasPlanos = await db
+    .select({
+      status: planosAcao.status,
+      prioridade: planosAcao.prioridade,
+      prazo: planosAcao.prazo,
+      criadoEm: planosAcao.criadoEm,
+      resolvidoEm: planosAcao.resolvidoEm,
+      contratoId: planosAcao.contratoId,
+      contratoNome: contratos.nome,
+      supervisorNome: usuarios.nome,
+    })
+    .from(planosAcao)
+    .innerJoin(contratos, eq(contratos.id, planosAcao.contratoId))
+    .innerJoin(usuarios, eq(usuarios.id, planosAcao.abertoPor))
+    .where(and(...condicoesPlanos));
+
+  const planosTipados = linhasPlanos.map((p) => ({
+    ...p,
+    status: p.status as StatusPlano,
+    prioridade: p.prioridade as Prioridade,
+  }));
+
+  const hoje = hojeISO();
+
+  /** Mesmo agrupamento para as duas quebras pedidas: por contrato e por supervisor. */
+  function agruparPlanos(chave: 'contratoNome' | 'supervisorNome'): LinhaPlanos[] {
+    const mapa = new Map<string, LinhaPlanos>();
+    for (const p of planosTipados) {
+      const nome = p[chave];
+      const linha = mapa.get(nome) ?? { nome, total: 0, abertos: 0, vencidos: 0, validos: 0 };
+      linha.total += 1;
+      if (p.status !== 'cancelado') linha.validos += 1;
+      if (estaAberto(p.status)) linha.abertos += 1;
+      if (estaVencido(p, hoje)) linha.vencidos += 1;
+      mapa.set(nome, linha);
+    }
+    return [...mapa.values()].sort((a, b) => b.abertos - a.abertos || b.total - a.total);
+  }
+
+  const porContratoPlanos = agruparPlanos('contratoNome');
+
+  const planos = {
+    ...resumirPlanos(planosTipados, hoje),
+    total: planosTipados.length,
+    porContrato: porContratoPlanos,
+    porSupervisor: agruparPlanos('supervisorNome'),
+    // Reincidência: mais de um plano no mesmo contrato dentro do período.
+    reincidentes: porContratoPlanos
+      .filter((c) => c.validos > 1)
+      .sort((a, b) => b.validos - a.validos)
+      .map((c) => ({ nome: c.nome, total: c.validos, abertos: c.abertos })),
+  };
+
   const [listaSupervisores, listaContratos] = await Promise.all([
     db
       .select({ id: usuarios.id, nome: usuarios.nome })
@@ -370,6 +460,7 @@ export async function carregarPainel(f: Filtros): Promise<DadosPainel> {
     semLocalizacao,
     demandas,
     prazos,
+    planos,
     supervisores: listaSupervisores,
     contratos: listaContratos,
   };
