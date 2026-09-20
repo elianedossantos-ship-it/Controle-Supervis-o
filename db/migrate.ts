@@ -8,8 +8,13 @@ async function main() {
     throw new Error('DATABASE_URL não definida. Copie .env.example para .env.');
   }
 
-  // max: 1 — o migrator precisa rodar as migrations em série, numa só conexão.
-  const cliente = postgres(process.env.DATABASE_URL, { max: 1 });
+  const cliente = postgres(process.env.DATABASE_URL, {
+    // max: 1 — o migrator precisa rodar as migrations em série, numa só conexão.
+    max: 1,
+    // O Postgres emite NOTICE de "já existe, pulando" a cada execução. Sem
+    // isto eles saem como objetos de erro e assustam quem só rodou o comando.
+    onnotice: () => {},
+  });
 
   try {
     await migrate(drizzle(cliente), { migrationsFolder: './db/migrations' });

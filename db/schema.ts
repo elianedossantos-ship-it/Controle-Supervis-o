@@ -5,6 +5,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
   text,
@@ -121,6 +122,14 @@ export const programacoes = pgTable(
     semanaFim: date('semana_fim').notNull(),
     status: text('status').notNull().default('rascunho'),
     enviadaEm: timestamp('enviada_em', { withTimezone: true }),
+    /**
+     * Seção 4.2: "a decisão de enviar fica registrada". Guarda a lista de
+     * avisos de periodicidade que estava na tela no momento do envio — NULL
+     * quando não havia nenhum. O DDL da seção 3 não tinha onde gravar isso.
+     */
+    avisosNoEnvio: jsonb('avisos_no_envio').$type<
+      { contratoId: string; contratoNome: string; periodicidade: string; motivo: string }[]
+    >(),
     criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

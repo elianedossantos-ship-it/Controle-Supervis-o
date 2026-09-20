@@ -22,7 +22,8 @@ exportação gerada a partir das visitas.
 | 2 | Cadastro de feriados | pronto |
 | 2 | Carteira: mover contrato preservando o histórico | pronto |
 | 2 | Importação inicial do REG-061 em Excel | pronto |
-| 3+ | Montagem da semana, Meu dia, painel, prazos, avaliações, exportação | próximas entregas |
+| 3 | Montagem da semana, com avisos de periodicidade e envio | pronto |
+| 4+ | Meu dia, painel, prazos, avaliações, exportação | próximas entregas |
 
 As rotas das telas futuras já existem e já respeitam o papel, mas exibem apenas
 um aviso de "próxima entrega".
@@ -68,7 +69,8 @@ npm run dev
 /app
   (auth)/login              login (e-mail e senha)
   (app)/                    área autenticada, com o layout e a navegação por papel
-    meu-dia  programacao  prazos
+    meu-dia  prazos
+    programacao/            grade da semana, avisos e envio
     painel  avaliacoes  exportar
     cadastros/
       supervisores/         lista, novo, editar, reset de senha
@@ -89,6 +91,9 @@ npm run dev
   navegacao.ts              itens de menu e o papel mínimo de cada um
   formulario.ts             estado devolvido pelas server actions de cadastro
   datas.ts                  DATE do Postgres sem deslocar o dia por fuso
+  semana.ts                 a semana de segunda a sexta, contada em UTC
+  periodicidade.ts          as regras de aviso da seção 4.2
+  feriados-aplicaveis.ts    qual feriado alcança qual contrato
   contratos.ts  feriados.ts  uf.ts    listas fechadas do domínio
   importacao-reg061.ts      leitura da planilha REG-061
 proxy.ts                    barreira de sessão (o "middleware" do Next 16)
@@ -156,6 +161,53 @@ carteira, e a tela avisa. Reimportar o mesmo arquivo não duplica nada.
 reais, por seletor. Aceitar qualquer par de letras criaria furo silencioso:
 feriado estadual com UF inexistente nunca casaria com contrato nenhum e o dia
 seguiria aberto para programação.
+
+## Montagem da semana
+
+A grade tem os contratos da carteira nas linhas e segunda a sexta nas colunas.
+Sem parâmetro, a tela abre na **semana seguinte** — é ela que o supervisor monta
+na sexta. Coordenador e admin escolhem de qual supervisor é a semana.
+
+**Legenda das células.** `P` programada (clicável), `R` realizada, `E` extra,
+`F` feriado. Só a `P` é editável: visita já realizada ou lançada como extra
+aparece na grade mas não se desmarca ali, porque ela não nasceu da montagem da
+semana. Salvar regrava apenas as visitas `prevista` de origem `programada` da
+semana — realizada, cancelada e extra ficam intactas.
+
+**Feriados.** Um feriado nacional bloqueia o dia para todos os contratos; um
+estadual só para os da UF; um municipal só para os daquele município. Sem isso,
+o aniversário de uma cidade travaria a agenda do supervisor inclusive em
+contrato de outro estado. Contrato sem cidade/UF cadastrados só é alcançado por
+feriado nacional.
+
+**Periodicidade é aviso, nunca bloqueio.** Ao enviar, o sistema lista os
+contratos fora do esperado e oferece *Enviar assim mesmo*; o rascunho já fica
+salvo nesse momento, então nada se perde. Dentro da grade, a marcação vermelha
+na linha acompanha os cliques.
+
+| Periodicidade | Esperado | Avisa quando |
+| --- | --- | --- |
+| SEMANAL | 1 visita na semana | nenhuma visita na semana |
+| 2X NA SEMANA | 2 visitas na semana | menos de 2 |
+| QUINZENAL | 1 a cada 2 semanas | sem visita na semana e a última realizada é anterior a 2 semanas fechadas |
+| MENSAL | 1 no mês | é a última semana do mês e o mês está sem visita |
+
+Realizada e extra contam junto com as programadas para essas contas.
+
+**O envio trava a semana.** Enviada, a programação não aceita mais gravação —
+nem pela tela, nem por requisição forjada. Daí em diante restam registrar a
+visita, cancelar com motivo ou lançar extra. Só coordenador e admin reabrem.
+
+**A decisão de enviar fica registrada.** A seção 4.2 exige isso, mas o DDL da
+seção 3 não tinha onde guardar. Foi acrescentada a coluna
+`programacoes.avisos_no_envio` (JSONB), que grava a lista de avisos que estava
+na tela no momento do envio — `NULL` quando não havia nenhum. Se a coordenação
+preferir outro lugar para esse registro, é só dizer.
+
+**Semana em UTC.** Toda conta de data é feita sobre `'YYYY-MM-DD'` em UTC. Em
+fuso local, uma virada de horário de verão deslocaria a segunda-feira da semana.
+A regra MENSAL usa o mês da **segunda-feira**: numa semana que cruza a virada do
+mês, quem está acabando é o mês em que ela começou.
 
 ## Segurança da sessão
 

@@ -1,0 +1,1 @@
+ALTER TABLE "programacoes" ADD COLUMN "avisos_no_envio" jsonb;
