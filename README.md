@@ -24,7 +24,8 @@ exportação gerada a partir das visitas.
 | 2 | Importação inicial do REG-061 em Excel | pronto |
 | 3 | Montagem da semana, com avisos de periodicidade e envio | pronto |
 | 4 | Meu dia: registro com foto e GPS, cancelamento, visita extra, demandas | pronto |
-| 5+ | Painel, prazos, avaliações, planos de ação, exportação | próximas entregas |
+| 5 | Painel do coordenador: indicadores, filtros e listas de ação | pronto |
+| 6+ | Exportação REG-061, prazos, avaliações, planos de ação | próximas entregas |
 
 As rotas das telas futuras já existem e já respeitam o papel, mas exibem apenas
 um aviso de "próxima entrega".
@@ -73,6 +74,7 @@ npm run dev
     prazos
     meu-dia/                demandas, visitas do dia, registro e cancelamento
     programacao/            grade da semana, avisos e envio
+    painel/                 indicadores, filtros e listas de ação
     painel  avaliacoes  exportar
     cadastros/
       supervisores/         lista, novo, editar, reset de senha
@@ -94,6 +96,7 @@ npm run dev
   formulario.ts             estado devolvido pelas server actions de cadastro
   datas.ts                  DATE do Postgres sem deslocar o dia por fuso
   semana.ts                 a semana de segunda a sexta, contada em UTC
+  indicadores.ts            as fórmulas da seção 7
   storage.ts                evidências: driver local ou S3 compatível
   storage-local.ts          driver de disco, só para desenvolvimento
   periodicidade.ts          as regras de aviso da seção 4.2
@@ -250,6 +253,43 @@ demandas. Não registra nem cancela por ele: a seção 4.3 diz que cancelar é
 "apenas pelo supervisor dono da visita", e registrar execução por quem não foi
 a campo esvaziaria o sentido da evidência. Se a intenção era outra, é um ajuste
 pequeno.
+
+## Painel do coordenador
+
+Corte padrão: mês corrente. Filtros de período, supervisor e contrato numa
+linha só, acima dos indicadores.
+
+**Aderência** segue a fórmula da seção 7 ao pé da letra:
+`(realizadas programadas + extras realizadas) ÷ programadas × 100`. Duas
+consequências que ficaram como estão, de propósito:
+
+- **Pode passar de 100%.** Uma semana com muitas extras rende mais visitas do
+  que as programadas. É o que a fórmula diz e é informação útil, então não foi
+  limitada em 100%.
+- **Sem visita programada no período, o indicador fica indefinido** e aparece
+  como travessão. Virar "0%" seria mentira: não houve o que cumprir.
+
+**Cumprimento da periodicidade** estende a regra semanal da seção 4.2 ao período
+escolhido no filtro, usando semanas inteiras: um recorte de 10 dias cobra 1
+visita de um contrato semanal, não 1,4. Período curto demais para cobrar
+qualquer coisa tira o contrato da conta, em vez de deixá-lo passar como
+cumprido de graça. Esta extensão é interpretação minha — o escopo define o
+esperado por semana, não por período livre.
+
+**Indicadores que ainda não existem.** Cumprimento de prazos e prazos em atraso
+dependem do módulo da seção 8; evolução trimestral, da seção 9; planos de ação,
+da seção 10. O painel diz isso no rodapé em vez de mostrar caixas vazias.
+
+### Sobre os gráficos
+
+O ranking de cancelamentos é série única, então usa **uma cor só** — a
+identidade de cada barra vem do rótulo, não da cor. A cor foi validada por
+script contra a superfície real dos cartões nos dois modos (contraste ≥ 3:1,
+faixa de luminosidade e chroma). As cores de situação (verde/vermelho) nunca
+aparecem sozinhas: sempre acompanham um rótulo em texto, porque cor sozinha não
+é informação para quem não a distingue.
+
+A mesma informação do gráfico está na tabela ao lado, visita a visita.
 
 ## Armazenamento das evidências
 

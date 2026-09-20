@@ -15,6 +15,13 @@
       "when": 1789858607618,
       "tag": "0001_avisos_no_envio",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789912954335,
+      "tag": "0002_demanda_concluida_em",
+      "breakpoints": true
     }
   ]
 }

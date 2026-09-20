@@ -1,0 +1,1 @@
+ALTER TABLE "demandas_extras" ADD COLUMN "concluida_em" timestamp with time zone;

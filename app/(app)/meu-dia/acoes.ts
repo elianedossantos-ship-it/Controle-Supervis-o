@@ -458,7 +458,7 @@ export async function concluirDemanda(formData: FormData): Promise<void> {
 
   await db
     .update(demandasExtras)
-    .set({ status: 'concluida' })
+    .set({ status: 'concluida', concluidaEm: new Date() })
     .where(and(eq(demandasExtras.id, id), ne(demandasExtras.status, 'concluida')));
 
   revalidatePath('/meu-dia');

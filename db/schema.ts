@@ -172,6 +172,12 @@ export const demandasExtras = pgTable(
     prioridade: text('prioridade'),
     status: text('status').notNull().default('aberta'),
     lidaEm: timestamp('lida_em', { withTimezone: true }),
+    /**
+     * Seção 7 pede "tempo médio até a conclusão" das demandas extras, e o DDL
+     * da seção 3 só guardava criado_em e lida_em. Sem este carimbo não há como
+     * calcular o indicador.
+     */
+    concluidaEm: timestamp('concluida_em', { withTimezone: true }),
     criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

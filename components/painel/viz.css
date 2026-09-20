@@ -1,0 +1,27 @@
+/*
+ * Cores da visualização. As barras são série única: uma cor só, validada
+ * contra a superfície do card nos dois modos (contraste >= 3:1). Os tons de
+ * status nunca aparecem sozinhos — sempre acompanham um rótulo em texto.
+ */
+.viz {
+  --viz-serie: #2a78d6;
+  --viz-trilha: #e6eef9;
+  --viz-bom: #0ca30c;
+  --viz-critico: #d03b3b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .viz {
+    --viz-serie: #3987e5;
+    --viz-trilha: #1d2a44;
+    --viz-bom: #0ca30c;
+    --viz-critico: #d03b3b;
+  }
+}
+
+:root[data-theme='dark'] .viz {
+  --viz-serie: #3987e5;
+  --viz-trilha: #1d2a44;
+  --viz-bom: #0ca30c;
+  --viz-critico: #d03b3b;
+}
