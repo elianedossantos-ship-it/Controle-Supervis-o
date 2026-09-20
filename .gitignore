@@ -27,3 +27,4 @@ yarn-error.log*
 *.pem
 .vercel
 coverage/
+armazenamento/

@@ -23,7 +23,8 @@ exportação gerada a partir das visitas.
 | 2 | Carteira: mover contrato preservando o histórico | pronto |
 | 2 | Importação inicial do REG-061 em Excel | pronto |
 | 3 | Montagem da semana, com avisos de periodicidade e envio | pronto |
-| 4+ | Meu dia, painel, prazos, avaliações, exportação | próximas entregas |
+| 4 | Meu dia: registro com foto e GPS, cancelamento, visita extra, demandas | pronto |
+| 5+ | Painel, prazos, avaliações, planos de ação, exportação | próximas entregas |
 
 As rotas das telas futuras já existem e já respeitam o papel, mas exibem apenas
 um aviso de "próxima entrega".
@@ -69,7 +70,8 @@ npm run dev
 /app
   (auth)/login              login (e-mail e senha)
   (app)/                    área autenticada, com o layout e a navegação por papel
-    meu-dia  prazos
+    prazos
+    meu-dia/                demandas, visitas do dia, registro e cancelamento
     programacao/            grade da semana, avisos e envio
     painel  avaliacoes  exportar
     cadastros/
@@ -92,6 +94,8 @@ npm run dev
   formulario.ts             estado devolvido pelas server actions de cadastro
   datas.ts                  DATE do Postgres sem deslocar o dia por fuso
   semana.ts                 a semana de segunda a sexta, contada em UTC
+  storage.ts                evidências: driver local ou S3 compatível
+  storage-local.ts          driver de disco, só para desenvolvimento
   periodicidade.ts          as regras de aviso da seção 4.2
   feriados-aplicaveis.ts    qual feriado alcança qual contrato
   contratos.ts  feriados.ts  uf.ts    listas fechadas do domínio
@@ -208,6 +212,78 @@ preferir outro lugar para esse registro, é só dizer.
 fuso local, uma virada de horário de verão deslocaria a segunda-feira da semana.
 A regra MENSAL usa o mês da **segunda-feira**: numa semana que cruza a virada do
 mês, quem está acabando é o mês em que ela começou.
+
+## Meu dia
+
+A tela que o supervisor usa em pé, no corredor da unidade. Ordem fixa: primeiro
+as demandas abertas da coordenação, depois as visitas do dia. Cada visita traz
+endereço com link para o mapa, o contato principal com telefone clicável, e as
+três ações: **Realizada**, **Cancelar** e **Detalhes**. No rodapé, fixo,
+**+ Visita extra**.
+
+**Registrar como realizada** exige foto. O campo usa `capture="environment"`,
+que faz o celular abrir a câmera traseira — vale registrar que isso é uma dica
+ao navegador: nenhum site consegue, por conta própria, impedir que a pessoa
+escolha da galeria. O horário é carimbo do servidor, nunca do aparelho, porque
+o relógio do celular é editável. A localização é capturada no mesmo instante.
+
+**GPS que falha não trava o supervisor.** Negada a permissão ou sem sinal, a
+tela avisa, a visita é registrada com a foto e o horário, e fica marcada como
+*sem localização* — que é exatamente o que o painel vai listar. Bloquear
+prenderia o supervisor em prédio sem sinal.
+
+**Cancelar** só depois do envio e só pelo supervisor dono da visita (seção 4.3),
+com motivo da lista fechada. O item "Outro" abre campo de texto obrigatório.
+Visita já registrada como realizada não se cancela.
+
+**Visita extra** aceita qualquer contrato da carteira vigente, mesmo o que não
+estava programado na semana, e entra como prevista — a execução é registrada
+com foto, igual às demais.
+
+**Demandas da coordenação** (seção 4.6) aparecem no topo até serem concluídas.
+Abrir o Meu dia marca a demanda como lida, que é de onde o painel vai medir o
+tempo até a conclusão. Com contrato e data, a demanda já cria a visita
+correspondente, com `origem = 'demanda_coordenacao'`.
+
+**O que a coordenação faz aqui.** Vê o dia de qualquer supervisor e cria
+demandas. Não registra nem cancela por ele: a seção 4.3 diz que cancelar é
+"apenas pelo supervisor dono da visita", e registrar execução por quem não foi
+a campo esvaziaria o sentido da evidência. Se a intenção era outra, é um ajuste
+pequeno.
+
+## Armazenamento das evidências
+
+A seção 11 define S3 compatível. Qual provedor é a decisão 13.3, ainda aberta —
+mas Cloudflare R2 e AWS S3 falam o mesmo protocolo, então a escolha é
+configuração e não código:
+
+```bash
+STORAGE_DRIVER="s3"
+S3_BUCKET="evidencias-reg061"
+S3_ENDPOINT="https://<conta>.r2.cloudflarestorage.com"   # AWS: deixe vazio
+S3_ACCESS_KEY_ID="..."
+S3_SECRET_ACCESS_KEY="..."
+```
+
+Em desenvolvimento, `STORAGE_DRIVER=local` grava em disco e não exige bucket
+nenhum. O driver local vive em módulo separado justamente para o acesso a
+arquivo não entrar no pacote de produção — o `next build` ainda avisa sobre ele,
+e o aviso é esperado.
+
+O driver S3 foi conferido contra um servidor de teste que registra a requisição:
+o PUT sai assinado em SigV4, no caminho `/<bucket>/<chave>`, com o content-type
+e o corpo corretos, e o GET devolve os mesmos bytes. **Ainda não foi exercitado
+contra um bucket de verdade**, o que depende das credenciais do provedor
+escolhido.
+
+**A foto não é arquivo público.** Ela mostra o interior da unidade do cliente,
+então é servida por rota autenticada (`/api/evidencias/...`): sem sessão devolve
+401, supervisor de outra carteira recebe 403, e a coordenação acessa. A chave é
+um UUID sob `evidencias/<ano>/<mês>/`, validada por formato antes de virar
+caminho em disco — nome de arquivo nunca vem do que o usuário enviou.
+
+Falta definir, junto com o provedor, **por quanto tempo a evidência fica
+guardada** (parte da decisão 13.3).
 
 ## Segurança da sessão
 
