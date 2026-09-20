@@ -26,10 +26,14 @@ exportação gerada a partir das visitas.
 | 4 | Meu dia: registro com foto e GPS, cancelamento, visita extra, demandas | pronto |
 | 5 | Painel do coordenador: indicadores, filtros e listas de ação | pronto |
 | 6 | Exportação do REG-061 em Excel e PDF | pronto |
-| 7+ | Prazos (seção 8), avaliações (seção 9), planos de ação (seção 10) | próximas entregas |
+| 7 | Prazos e obrigações (seção 8) | pronto |
+| 8 | Avaliação trimestral de desempenho (seção 9) | pronto |
+| 9 | Planos de ação por contrato (seção 10) | pronto |
+| — | Acabamento: trava da sexta (13.1), 404 e barreira de erro em português | pronto |
 
-As rotas das telas futuras já existem e já respeitam o papel, mas exibem apenas
-um aviso de "próxima entrega".
+Todas as seções do escopo estão implementadas. O que ficou de fora é o que o
+escopo declara fora de escopo na seção 12 (REG-090, Tobbits, app nativo, modo
+offline, aprovação da programação pela coordenação e roteirização).
 
 ## Stack
 
@@ -65,6 +69,29 @@ npm run dev
 | `npm run db:migrate` | aplica as migrations pendentes |
 | `npm run db:seed` | carga inicial (idempotente: pode rodar de novo) |
 | `npm run db:studio` | abre o Drizzle Studio |
+| `npm run e2e` | roda a bateria de navegador contra o servidor de desenvolvimento |
+
+## Como os testes rodam
+
+As regras de negócio puras (`lib/`) são exercitadas por funções, e o resto é
+verificado no navegador, contra o Postgres de verdade — nada de mock: a
+pergunta que interessa é se o supervisor consegue fazer o trabalho dele.
+
+```bash
+npm run dev                 # deixa o servidor de pé, na porta 3280
+npm run db:seed             # base limpa, com o admin
+npm run e2e                 # roda as 27 suítes na ordem de dependência
+```
+
+A bateria vive em `e2e/`. Cada suíte semeia o que precisa e imprime uma linha
+por verificação; o `rodar-tudo.sh` considera uma suíte aprovada quando ela sai
+com código 0 e não imprime nenhuma linha `FALHA`. Para rodar só uma parte:
+`SUITES="planos janela" ./e2e/rodar-tudo.sh`. A porta e o caminho do Chromium
+saem de `E2E_PORTA` e `PLAYWRIGHT_CHROMIUM`.
+
+Boa parte da bateria não testa a tela, e sim o servidor: várias suítes forjam o
+POST da server action — trocando o contrato, o papel ou a célula — para provar
+que a recusa não depende do botão estar desabilitado.
 
 ## Estrutura
 
@@ -72,12 +99,13 @@ npm run dev
 /app
   (auth)/login              login (e-mail e senha)
   (app)/                    área autenticada, com o layout e a navegação por papel
-    prazos
     meu-dia/                demandas, visitas do dia, registro e cancelamento
     programacao/            grade da semana, avisos e envio
+    prazos/                 obrigações do mês, marcação e justificativa
+    planos/                 planos de ação por contrato, com histórico
+    avaliacoes/             avaliação trimestral, PDI e ciência
     painel/                 indicadores, filtros e listas de ação
     exportar/               geração do REG-061 mensal
-    painel  avaliacoes  exportar
     cadastros/
       supervisores/         lista, novo, editar, reset de senha
       contratos/            lista, novo, editar (com os contatos do cliente)
@@ -85,6 +113,8 @@ npm run dev
       feriados/             lista e inclusão
       importacao/           carga inicial a partir do REG-061 em Excel
   sem-acesso                papel não alcança a tela pedida
+  not-found.tsx             404 em português, com a saída certa para cada papel
+  global-error.tsx          erro que derruba o layout raiz (estilo inline)
 /db
   schema.ts                 as 20 tabelas
   migrations/               SQL versionado
@@ -98,7 +128,11 @@ npm run dev
   formulario.ts             estado devolvido pelas server actions de cadastro
   datas.ts                  DATE do Postgres sem deslocar o dia por fuso
   semana.ts                 a semana de segunda a sexta, contada em UTC
+  janela.ts                 a trava da sexta: fecha às 18h da sexta anterior
   indicadores.ts            as fórmulas da seção 7
+  prazos.ts                 competências, prazos e cumprimento da seção 8
+  avaliacao.ts              notas, pesos e faixas da seção 9
+  planos.ts                 prioridade, prazo sugerido e resumo da seção 10
   reg061.ts                 monta a grade mensal a partir das visitas
   reg061-dados.ts           consulta que alimenta a exportação
   reg061-excel.ts           geração do .xlsx
@@ -125,8 +159,10 @@ também por coordenador e admin.
 
 **Autorização de rota não é isolamento de dados.** `requireRole()` diz quem
 entra na tela. O isolamento por carteira é regra de consulta: toda busca de
-visita feita por um supervisor filtra por `supervisor_id` no backend. Isso vale
-a partir da entrega que trouxer as consultas de visita.
+visita, plano ou evidência feita por um supervisor filtra por `supervisor_id`
+ou pela carteira vigente no backend. Vale também na escrita: formulário
+forjado com o contrato de outra carteira é recusado pelo servidor, não pela
+tela.
 
 ## Cadastros e carteira
 
@@ -207,6 +243,28 @@ na linha acompanha os cliques.
 
 Realizada e extra contam junto com as programadas para essas contas.
 
+**A trava da sexta (decisão 13.1).** A pergunta do escopo é o horário em que a
+programação fecha. Resposta: **sexta às 18h**, no fuso de São Paulo, da semana
+anterior à que está sendo montada.
+
+| Momento | O supervisor | A coordenação |
+| --- | --- | --- |
+| até sexta 18h | monta, salva e envia | tudo |
+| depois de sexta 18h | nada — a grade fica só de leitura | tudo, inclusive enviar |
+
+A quinta-feira da proposta ficou como **referência na tela, não como bloqueio**:
+é a partir dela que a semana corrente já está quase toda registrada e os avisos
+de periodicidade valem mais. Travar o envio antes disso custaria caro — quem
+organiza a semana na segunda teria de voltar na quinta só para clicar — e não é
+o que a decisão 13.1 pergunta.
+
+Depois das 18h de sexta a semana fecha, e a saída de emergência é a
+coordenação: ela edita e envia a qualquer hora. Sem essa saída, um esquecimento
+na sexta deixaria a semana inteira sem programação, que é pior que o atraso. O
+atraso em si não some: a seção 8 registra o envio fora do prazo como obrigação
+"atendida com atraso". Na semana travada, um botão leva direto à semana
+seguinte — tela sem saída é beco.
+
 **O envio trava a semana.** Enviada, a programação não aceita mais gravação —
 nem pela tela, nem por requisição forjada. Daí em diante restam registrar a
 visita, cancelar com motivo ou lançar extra. Só coordenador e admin reabrem.
@@ -282,9 +340,12 @@ qualquer coisa tira o contrato da conta, em vez de deixá-lo passar como
 cumprido de graça. Esta extensão é interpretação minha — o escopo define o
 esperado por semana, não por período livre.
 
-**Indicadores que ainda não existem.** Cumprimento de prazos e prazos em atraso
-dependem do módulo da seção 8; evolução trimestral, da seção 9; planos de ação,
-da seção 10. O painel diz isso no rodapé em vez de mostrar caixas vazias.
+**Prazos, avaliações e planos** entram no mesmo painel, cada um no seu bloco:
+cumprimento de prazos e prazos em atraso (seção 8), com a quebra por obrigação;
+e planos de ação (seção 10.4) com abertos, vencidos, tempo médio até resolver,
+contratos reincidentes e as quebras por contrato e por supervisor. O recorte
+dos planos é a data de abertura, como nas demandas — a tela `/planos` é que
+mostra o que está em aberto hoje, venha de quando vier.
 
 ### Sobre os gráficos
 
@@ -338,11 +399,97 @@ no canto direito e campos de assinatura. O PDF sai em A4 paisagem — com três
 colunas fixas mais 31 dias, retrato não cabe — quebrando em páginas quando a
 carteira é grande, com as linhas de assinatura no rodapé de cada uma.
 
+## Prazos e obrigações (seção 8)
+
+A tela `/prazos` abre no mês corrente e lista, por supervisor, cada ocorrência
+das obrigações do catálogo. O catálogo fica em tabela (`obrigacoes`), não em
+código: a coordenação inclui, muda prazo ou aposenta uma obrigação pela tela.
+
+| Obrigação | Recorrência | Prazo |
+| --- | --- | --- |
+| Lançamento das medições | mensal | dia 1 |
+| Entrega de folha de ponto | mensal | dia 7 |
+| Solicitações de férias | mensal | dia 8 |
+| Solicitação de material | mensal | dia 10 |
+| Cronograma de visitas | semanal | sexta-feira |
+| Mapa de frequência atualizado | diária, consolidada no mês | fim do mês |
+
+**Competência é a âncora.** Obrigação mensal e diária têm uma ocorrência por
+mês (competência no dia 1º); a semanal tem uma por semana, e a competência é a
+**segunda-feira** — a mesma âncora da programação.
+
+**O cronograma de visitas se marca sozinho.** É a única obrigação `automatica`:
+o sistema já sabe se a programação da semana seguinte foi enviada até a sexta,
+então compara o dia do envio (em São Paulo) com o prazo e marca *atendido* ou
+*atendido com atraso* sem ninguém tocar. As demais são marcadas à mão.
+
+**Vencida e não marcada continua pendente.** O status não vira "não atendido"
+sozinho: quem decide isso é a coordenação. A tela separa a pendente que ainda
+tem prazo da que já passou, e o painel conta as vencidas em bloco próprio.
+*Não atendido* e *não se aplica* exigem justificativa escrita.
+
+## Avaliação trimestral (seção 9)
+
+Modelo REV 00 versionado em tabela: 6 competências, 21 critérios, pesos que
+somam 100% (operação 25, documentação 20, equipe 20, cliente 15, materiais 10,
+postura 10). A avaliação aponta para a versão do modelo usada — finalizada, ela
+não muda de versão nem de peso, mesmo que o modelo seja revisado depois.
+
+> O texto da seção 9 fala em "22 critérios", mas a tabela de competências do
+> próprio escopo soma 21 (4+4+4+3+3+3). Seguimos a tabela. Se faltou mesmo um
+> critério, ele entra como REV 01 do modelo, sem mexer nas avaliações já feitas.
+
+**Critério em branco sai do denominador (decisão 13.13).** "Não se aplica" não
+vira zero: o peso da competência é **redistribuído** entre os critérios
+respondidos. Zerar puniria o supervisor por uma situação que não existiu na
+carteira dele. A consequência está declarada no relatório: quem foi avaliado em
+18 critérios é comparado com quem foi avaliado em 21.
+
+**Fluxo.** Rascunho é trabalho do avaliador e não fica visível para o avaliado.
+Finalizada, a nota congela e o supervisor passa a enxergá-la. A ciência é
+**aceite eletrônico dentro do sistema** (decisão 13.11): o supervisor entra,
+lê e confirma — com carimbo de data e hora. O botão de ciência fica fora das
+abas, senão ele só apareceria para quem navegasse até a última.
+
+**Visibilidade (decisão 13.12).** O supervisor vê as próprias avaliações
+finalizadas, inclusive o histórico — a avaliação serve para orientar, e
+orientação que a pessoa não pode reler não orienta.
+
+## Planos de ação (seção 10)
+
+O plano **nasce dentro da visita e pertence ao contrato**. É isso que o faz
+reaparecer na próxima ida à unidade: ao abrir o Meu dia, a visita mostra os
+planos em aberto daquele contrato *antes* de qualquer ação, e, depois de
+registrar, pergunta se é caso de abrir outro.
+
+**Prazo sugerido pela prioridade (decisão 13.15).** O sistema sugere e o
+supervisor pode trocar — travar impediria o caso real em que a solução depende
+de terceiro.
+
+| Prioridade | Prazo sugerido |
+| --- | --- |
+| Crítica | 48 horas |
+| Alta | 7 dias |
+| Normal | 15 dias |
+| Baixa | 30 dias |
+
+**Quem encerra (decisão 13.16).** Prioridade alta ou crítica só é encerrada
+pela **coordenação**: quem abriu a ocorrência grave não é quem decide que ela
+acabou. Normal e baixa o próprio supervisor resolve. Resolver exige foto —
+evidência da solução, não só da falha. Cancelar exige justificativa. Reabrir é
+só da coordenação, e também exige motivo.
+
+**O histórico é somente-acréscimo.** Acompanhamento, edição, resolução,
+reabertura e cancelamento viram linhas em `plano_atualizacoes`, cada uma com
+autor e data. Editar um plano não apaga o que ele dizia antes: grava um
+registro nomeando o que mudou.
+
 ## Armazenamento das evidências
 
-A seção 11 define S3 compatível. Qual provedor é a decisão 13.3, ainda aberta —
-mas Cloudflare R2 e AWS S3 falam o mesmo protocolo, então a escolha é
-configuração e não código:
+A seção 11 define S3 compatível. A decisão 13.3 ficou em **Cloudflare R2**:
+fala o mesmo protocolo do S3, e o que pesa aqui é o tráfego de saída — toda
+foto de evidência é lida de volta pela coordenação, e o R2 não cobra egresso.
+Trocar para AWS S3 é configuração, não código: basta deixar o endpoint vazio.
 
 ```bash
 STORAGE_DRIVER="s3"
@@ -369,8 +516,12 @@ então é servida por rota autenticada (`/api/evidencias/...`): sem sessão devo
 um UUID sob `evidencias/<ano>/<mês>/`, validada por formato antes de virar
 caminho em disco — nome de arquivo nunca vem do que o usuário enviou.
 
-Falta definir, junto com o provedor, **por quanto tempo a evidência fica
-guardada** (parte da decisão 13.3).
+**Retenção: 5 anos** (parte da decisão 13.3), alinhada ao prazo em que os
+registros da qualidade costumam ser cobrados. Isso é regra de bucket, não de
+código — uma *lifecycle rule* no R2 apagando o prefixo `evidencias/` depois de
+60 meses —, justamente para que mudar o prazo não exija subir versão. O banco
+guarda só a chave e a data de captura; a foto some do bucket e a linha da
+evidência fica, com o histórico da visita intacto.
 
 ## Segurança da sessão
 
@@ -384,6 +535,9 @@ guardada** (parte da decisão 13.3).
   senão o sistema entregaria, pela mensagem ou pelo tempo de resposta, quais
   e-mails estão cadastrados.
 - O destino guardado no login (`?de=`) só é aceito se for caminho interno.
+- Erro de servidor não mostra a mensagem técnica na tela: ela pode carregar
+  nome de contrato, e-mail ou trecho de consulta. Fica no log, e o usuário
+  recebe o código do erro para passar à coordenação.
 
 ## Regras que o schema sustenta
 
@@ -404,21 +558,46 @@ guardada** (parte da decisão 13.3).
 periodicidade no banco. O cálculo do esperado entra junto com a tela de
 montagem da semana.
 
-## Pendências que afetam o schema
+## As 16 decisões da seção 13
 
-1. **`obrigacao_ocorrencias`** — o `UNIQUE (obrigacao_id, supervisor_id,
-   contrato_id, competencia)` não impede duplicata quando `contrato_id` é
-   `NULL`, que é justamente o caso de `escopo = 'supervisor'`: o Postgres trata
-   `NULL` como valor distinto. Está como no DDL. A correção depende da decisão
-   13.8 (obrigação por supervisor ou por contrato) e seria um segundo índice
-   único parcial para o caso sem contrato.
-2. **Decisão 13.6 (sábado)** — hoje a semana é de segunda a sexta. Se existir
-   contrato com visita em sábado, muda a montagem da semana, não o schema:
-   `visitas.data_prevista` já aceita qualquer data.
-3. **Decisão 13.7 (supervisor afastado)** — `carteira` já guarda vigência com
-   `inicio` e `fim`, então dá para migrar a carteira temporariamente. Falta
-   decidir se é isso ou se os contratos ficam sem visita no período.
+O escopo abriu 16 decisões. Todas estão fechadas — as duas primeiras pela
+coordenação, o resto por decisão nossa, com o critério anotado ao lado. Nenhuma
+é irreversível: onde a escolha foi de proposta, está dito o que muda se for
+outra.
 
-As demais decisões em aberto da seção 13 do escopo (trava da sexta, formato da
-exportação, armazenamento de fotos, WhatsApp, carga inicial, avaliação e planos
-de ação) não travam esta entrega.
+| # | Assunto | Decisão | Por quê |
+| --- | --- | --- | --- |
+| 13.1 | Trava da sexta | Fecha **sexta às 18h**; a coordenação passa por cima a qualquer hora. A quinta da proposta virou referência na tela, não bloqueio | O horário de fechamento é o da proposta e é o que a pergunta pede; travar o envio antes da quinta só faria o supervisor voltar para clicar. A saída pela coordenação evita que um esquecimento deixe a semana sem programação |
+| 13.2 | Exportação REG-061 | **Já com R, C e E**, além de P/F/S/D | Escolha da coordenação |
+| 13.3 | Fotos | Cloudflare R2, retenção de 5 anos por *lifecycle rule* | Mesmo protocolo do S3 e sem custo de egresso, que é o que pesa numa base lida de volta |
+| 13.4 | WhatsApp | Fase 1 só notifica dentro do app | É a proposta do escopo; a API oficial exige aprovação de template e custo por conversa, que não travam nada hoje |
+| 13.5 | Carga inicial | Importador lê as abas do REG-061 em Excel, quantas forem | Não fixamos 63 contratos: a tela importa o arquivo que vier |
+| 13.6 | Sábado | Semana de segunda a sexta | Nenhum contrato da base tem visita em sábado; `visitas.data_prevista` aceita qualquer data, então incluir sábado é mudar a montagem, não o schema |
+| 13.7 | Supervisor afastado | A carteira migra temporariamente | `carteira` já guarda vigência com `inicio` e `fim`: mover preserva o histórico e o REG-061 do mês passado continua correto |
+| 13.8 | Escopo das obrigações | Todas por **supervisor** | Por contrato, seriam mais de 60 marcações por mês; o campo `escopo` aceita os dois, então uma obrigação específica pode virar por contrato pela tela |
+| 13.9 | Mapa de frequência | Consolidação mensal | É a proposta do escopo: marcar 22 células por supervisor todo mês não se sustenta na rotina |
+| 13.10 | Atendido com atraso | Não conta como atendido no índice; tem coluna própria | É a proposta do escopo — entregar a folha no dia 9 não é o mesmo que não entregar |
+| 13.11 | Assinatura da avaliação | Aceite eletrônico dentro do sistema | Digitalizar assinatura em papel devolveria ao fluxo o arquivo solto que este sistema veio substituir |
+| 13.12 | Visibilidade da avaliação | O supervisor vê as próprias, finalizadas, com histórico | Avaliação que o avaliado não pode reler não orienta |
+| 13.13 | Critério em branco | Sai do denominador; o peso é redistribuído | Zerar puniria o supervisor por situação que não existiu na carteira dele |
+| 13.14 | Formato REG-060 | O registro digital basta; o REG-060 segue documento à parte | O plano já tem descrição, responsável, prazo, fotos e histórico com autor; gerar o formulário antigo a partir disso é exportação nova, não mudança de modelo |
+| 13.15 | Prazo do plano | O sistema sugere por prioridade, o supervisor pode trocar | Sugerir evita o prazo em branco; travar impediria o caso em que a solução depende de terceiro |
+| 13.16 | Quem encerra o plano | Alta e crítica só a coordenação | Quem abriu a ocorrência grave não é quem decide que ela acabou |
+
+## Três lugares onde o DDL do escopo ficou curto
+
+Cada um é uma regra escrita na seção 3 ou 4 que não tinha onde morar. Todos
+viraram migration, e todos são fáceis de desfazer se a coordenação preferir
+outro desenho.
+
+1. **`programacoes.avisos_no_envio`** (JSONB) — a seção 4.2 exige que "a
+   decisão de enviar fique registrada". Guarda a lista de avisos que estava na
+   tela no momento do envio.
+2. **`demandas_extras.concluida_em`** — a seção 7 pede o "tempo médio até a
+   conclusão" da demanda, e não havia carimbo de conclusão.
+3. **`obrigacao_ocorrencias_unica_sem_contrato`** — o `UNIQUE (obrigacao_id,
+   supervisor_id, contrato_id, competencia)` não impede duplicata quando
+   `contrato_id` é `NULL`, porque o Postgres trata `NULL` como valor distinto.
+   Com a decisão 13.8 (obrigação por supervisor), esse é justamente o caso
+   normal: o gerador de ocorrências criaria a mesma linha duas vezes. Um índice
+   único parcial cobre o caso sem contrato.

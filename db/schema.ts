@@ -345,6 +345,17 @@ export const feriados = pgTable(
       'feriados_abrangencia_check',
       sql`${t.abrangencia} IN ('nacional','estadual','municipal')`,
     ),
+    /*
+     * O mesmo feriado não entra duas vezes. `uf` e `municipio` são NULL no
+     * feriado nacional, e NULL não colide com NULL num único comum — daí o
+     * COALESCE, senão o 7 de setembro poderia ser cadastrado sem limite.
+     */
+    uniqueIndex('feriados_unico').on(
+      t.data,
+      t.abrangencia,
+      sql`coalesce(${t.uf}, '')`,
+      sql`coalesce(lower(${t.municipio}), '')`,
+    ),
   ],
 );
 

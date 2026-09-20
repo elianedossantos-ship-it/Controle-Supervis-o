@@ -54,7 +54,15 @@ export async function criarFeriado(
 
   if (!dados.success) return { erros: errosPorCampo(dados.error), campos };
 
-  await db.insert(feriados).values(dados.data);
+  try {
+    await db.insert(feriados).values(dados.data);
+  } catch (erro) {
+    // O índice `feriados_unico` impede o mesmo feriado duas vezes.
+    if (erro instanceof Error && erro.message.includes('feriados_unico')) {
+      return { erros: { data: 'Este feriado já está cadastrado.' }, campos };
+    }
+    throw erro;
+  }
 
   revalidatePath('/cadastros/feriados');
   return { ok: true };

@@ -41,7 +41,13 @@ export function Grade({ dados, supervisores, podeReabrir }: Props) {
   const [marcadas, setMarcadas] = useState<Set<string>>(iniciais);
 
   const enviada = dados.status === 'enviada';
-  const somenteLeitura = enviada;
+
+  /*
+   * Decisão 13.1: a janela da semana abre na quinta e fecha às 18h da sexta.
+   * A coordenação passa por cima em qualquer horário — é ela quem reabre.
+   */
+  const travada = dados.janela === 'fechada' && !podeReabrir;
+  const somenteLeitura = enviada || travada;
 
   const sujo = useMemo(() => {
     if (marcadas.size !== iniciais.size) return true;
@@ -158,6 +164,34 @@ export function Grade({ dados, supervisores, podeReabrir }: Props) {
                   Reabrir para edição
                 </Button>
               </form>
+            ) : null}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {!enviada ? (
+        <Alert variant={travada ? 'destructive' : 'default'} className="mb-6">
+          <AlertDescription>
+            <p className="font-medium">
+              {travada ? 'Janela fechada' : 'Prazo desta semana'}
+            </p>
+            <p>{dados.textoJanela}</p>
+            {travada ? (
+              <>
+                <p className="mt-1">
+                  Fale com a coordenação: ela edita e envia esta semana a qualquer hora.
+                </p>
+                {/* Tela travada sem saída é beco: a semana seguinte ainda é sua. */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => irPara(somarDias(dados.semana.inicio, 7))}
+                >
+                  Montar a semana seguinte
+                </Button>
+              </>
             ) : null}
           </AlertDescription>
         </Alert>
@@ -312,7 +346,7 @@ export function Grade({ dados, supervisores, podeReabrir }: Props) {
           </div>
 
           {/* Avisos de periodicidade */}
-          {!enviada ? (
+          {!enviada && !travada ? (
             <div className="mt-6">
               {avisosVisiveis && avisosVisiveis.length > 0 ? (
                 <Alert variant="destructive" className="mb-4">
@@ -387,7 +421,8 @@ export function Grade({ dados, supervisores, podeReabrir }: Props) {
                 <strong>P</strong> programada · <strong>R</strong> realizada ·{' '}
                 <strong>E</strong> extra · <strong>F</strong> feriado. Sábado, domingo e
                 feriado não recebem programação. Visita realizada ou extra não se
-                desmarca aqui. Enviada, a programação não pode mais ser editada.
+                desmarca aqui. Enviada, a programação não pode mais ser editada. A semana
+                fecha na sexta às 18h.
               </p>
             </div>
           ) : null}

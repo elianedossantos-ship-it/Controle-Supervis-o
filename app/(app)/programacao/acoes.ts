@@ -8,6 +8,7 @@ import { carteira, contratos, feriados, programacoes, usuarios, visitas } from '
 import { requireRole, sessaoAtual } from '@/lib/auth';
 import type { Periodicidade } from '@/lib/contratos';
 import { feriadoAlcancaContrato, type FeriadoRegistro } from '@/lib/feriados-aplicaveis';
+import { estadoDaJanela, textoDaJanela, type EstadoJanela } from '@/lib/janela';
 import { avaliarTodos, type Aviso } from '@/lib/periodicidade';
 import { ehFimDeSemana, mesDaSemana, semanaDe, somarDias, type Semana } from '@/lib/semana';
 import { texto } from '@/lib/formulario';
@@ -37,6 +38,9 @@ export type DadosDaSemana = {
   status: 'rascunho' | 'enviada';
   enviadaEm: Date | null;
   avisosNoEnvio: Aviso[] | null;
+  /** Decisão 13.1: quinta 00h abre, sexta 18h fecha. */
+  janela: EstadoJanela;
+  textoJanela: string;
   contratos: ContratoDaGrade[];
   feriados: FeriadoRegistro[];
   avisos: Aviso[];
@@ -223,6 +227,8 @@ export async function carregarSemana(
     supervisorNome: supervisor.nome,
     status: (programacao?.status as 'rascunho' | 'enviada') ?? 'rascunho',
     enviadaEm: programacao?.enviadaEm ?? null,
+    janela: estadoDaJanela(semana.inicio, new Date()),
+    textoJanela: textoDaJanela(semana.inicio, new Date()),
     avisosNoEnvio: (programacao?.avisosNoEnvio as Aviso[] | null) ?? null,
     contratos: grade,
     feriados: feriadosDaSemana,
@@ -296,6 +302,20 @@ export async function salvarSemana(
   if (programacaoAtual?.status === 'enviada') {
     return {
       erro: 'Esta programação já foi enviada e não pode mais ser editada.',
+    };
+  }
+
+  /*
+   * Decisão 13.1, a trava da sexta. A coordenação passa por cima em qualquer
+   * horário — é ela a saída de emergência da regra, e sem essa saída um
+   * esquecimento na sexta deixaria a semana inteira sem programação.
+   */
+  if (
+    sessao.papel === 'supervisor' &&
+    estadoDaJanela(semana.inicio, new Date()) === 'fechada'
+  ) {
+    return {
+      erro: 'A janela desta semana fechou às 18h de sexta. Peça à coordenação para reabrir.',
     };
   }
 

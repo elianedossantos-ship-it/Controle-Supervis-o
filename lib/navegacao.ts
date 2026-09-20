@@ -25,8 +25,9 @@ export const NAVEGACAO: GrupoNav[] = [
       { href: '/programacao', rotulo: 'Programação', exige: 'supervisor' },
       { href: '/prazos', rotulo: 'Prazos', exige: 'supervisor' },
       { href: '/planos', rotulo: 'Planos de ação', exige: 'supervisor' },
+      // Decisão 13.12: o supervisor vê as próprias avaliações finalizadas.
+      { href: '/avaliacoes', rotulo: 'Avaliações', exige: 'supervisor' },
       { href: '/painel', rotulo: 'Painel', exige: 'coordenador' },
-      { href: '/avaliacoes', rotulo: 'Avaliações', exige: 'coordenador' },
       { href: '/exportar', rotulo: 'Exportar REG-061', exige: 'coordenador' },
     ],
   },

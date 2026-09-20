@@ -28,3 +28,7 @@ yarn-error.log*
 .vercel
 coverage/
 armazenamento/
+
+# saída das suítes de navegador (telas e arquivos gerados)
+e2e/telas/
+e2e/saida/
