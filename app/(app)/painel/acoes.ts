@@ -8,11 +8,20 @@ import {
   demandasExtras,
   evidencias,
   motivosCancelamento,
+  obrigacaoOcorrencias,
+  obrigacoes,
   usuarios,
   visitas,
 } from '@/db/schema';
 import { requireRole } from '@/lib/auth';
 import type { Periodicidade } from '@/lib/contratos';
+import { hojeISO } from '@/lib/datas';
+import {
+  cumprimentoDePrazos,
+  prazosEmAtraso,
+  type CumprimentoPrazos,
+  type StatusOcorrencia,
+} from '@/lib/prazos';
 import {
   aderencia,
   cumprimentoDaPeriodicidade,
@@ -85,6 +94,10 @@ export type DadosPainel = {
   semVisita: SemVisita[];
   semLocalizacao: SemLocalizacao[];
   demandas: ResumoDemandas;
+  prazos: CumprimentoPrazos & {
+    emAtraso: number;
+    porObrigacao: { nome: string; cumprimento: CumprimentoPrazos }[];
+  };
   supervisores: { id: string; nome: string }[];
   contratos: { id: string; nome: string }[];
 };
@@ -270,6 +283,48 @@ export async function carregarPainel(f: Filtros): Promise<DadosPainel> {
       .map((d) => ({ criadoEm: d.criadoEm, concluidaEm: d.concluidaEm })),
   );
 
+  /*
+   * Prazos e obrigações (seção 8). O recorte é pela competência da ocorrência
+   * dentro do período filtrado; o filtro de contrato não se aplica, porque a
+   * obrigação padrão é do supervisor, não da unidade.
+   */
+  const condicoesPrazos = [
+    gte(obrigacaoOcorrencias.competencia, f.periodo.inicio),
+    lte(obrigacaoOcorrencias.competencia, f.periodo.fim),
+  ];
+  if (f.supervisorId) {
+    condicoesPrazos.push(eq(obrigacaoOcorrencias.supervisorId, f.supervisorId));
+  }
+
+  const ocorrencias = await db
+    .select({
+      status: obrigacaoOcorrencias.status,
+      prazo: obrigacaoOcorrencias.prazo,
+      marcadoEm: obrigacaoOcorrencias.marcadoEm,
+      obrigacaoNome: obrigacoes.nome,
+      ordem: obrigacoes.ordem,
+    })
+    .from(obrigacaoOcorrencias)
+    .innerJoin(obrigacoes, eq(obrigacoes.id, obrigacaoOcorrencias.obrigacaoId))
+    .where(and(...condicoesPrazos))
+    .orderBy(asc(obrigacoes.ordem));
+
+  const tipadas = ocorrencias.map((o) => ({
+    ...o,
+    status: o.status as StatusOcorrencia,
+  }));
+
+  const nomesObrigacoes = [...new Set(tipadas.map((o) => o.obrigacaoNome))];
+
+  const prazos = {
+    ...cumprimentoDePrazos(tipadas),
+    emAtraso: prazosEmAtraso(tipadas, hojeISO()),
+    porObrigacao: nomesObrigacoes.map((nome) => ({
+      nome,
+      cumprimento: cumprimentoDePrazos(tipadas.filter((o) => o.obrigacaoNome === nome)),
+    })),
+  };
+
   const [listaSupervisores, listaContratos] = await Promise.all([
     db
       .select({ id: usuarios.id, nome: usuarios.nome })
@@ -314,6 +369,7 @@ export async function carregarPainel(f: Filtros): Promise<DadosPainel> {
     semVisita,
     semLocalizacao,
     demandas,
+    prazos,
     supervisores: listaSupervisores,
     contratos: listaContratos,
   };

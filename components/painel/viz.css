@@ -25,3 +25,27 @@
   --viz-bom: #0ca30c;
   --viz-critico: #d03b3b;
 }
+
+/*
+ * Situações da grade de prazos. Mesma regra da visualização: a cor acompanha
+ * a sigla e o rótulo, nunca carrega o sentido sozinha.
+ */
+.prazos {
+  --prazo-atendido: #0ca30c;
+  --prazo-atraso: #b46a00;
+  --prazo-nao-atendido: #d03b3b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .prazos {
+    --prazo-atendido: #0ca30c;
+    --prazo-atraso: #c98500;
+    --prazo-nao-atendido: #d03b3b;
+  }
+}
+
+:root[data-theme='dark'] .prazos {
+  --prazo-atendido: #0ca30c;
+  --prazo-atraso: #c98500;
+  --prazo-nao-atendido: #d03b3b;
+}

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "obrigacao_ocorrencias_unica_sem_contrato" ON "obrigacao_ocorrencias" USING btree ("obrigacao_id","supervisor_id","competencia") WHERE "obrigacao_ocorrencias"."contrato_id" IS NULL;

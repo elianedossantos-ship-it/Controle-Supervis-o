@@ -119,6 +119,82 @@ export default async function PaginaPainel({ searchParams }: Props) {
         </div>
       </div>
 
+      {/* Prazos e obrigações (seção 8) */}
+      <section className="mb-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Bloco
+            rotulo="Cumprimento de prazos"
+            valor={formatarPercentual(d.prazos.percentual)}
+            severidade={
+              d.prazos.percentual === null
+                ? 'neutro'
+                : d.prazos.percentual >= 90
+                  ? 'bom'
+                  : 'critico'
+            }
+            marca={`${d.prazos.atendidos} de ${d.prazos.aplicaveis} no prazo`}
+            apoio={`${d.prazos.atendidosComAtraso} com atraso, que não contam aqui`}
+          />
+          <Bloco
+            rotulo="Prazos em atraso"
+            valor={String(d.prazos.emAtraso)}
+            severidade={d.prazos.emAtraso === 0 ? 'bom' : 'critico'}
+            marca={
+              d.prazos.emAtraso === 0
+                ? 'nada vencido'
+                : 'vencidos pendentes ou não atendidos'
+            }
+          />
+        </div>
+
+        <div className="bg-card rounded-lg border p-5">
+          <h2 className="mb-1 font-semibold">Cumprimento por obrigação</h2>
+          <p className="text-muted-foreground mb-4 text-sm">
+            &quot;Atendido com atraso&quot; tem coluna própria: entregar a folha no dia 9
+            não é o mesmo que não entregar.
+          </p>
+
+          {d.prazos.porObrigacao.length === 0 ? (
+            <Vazio>Nenhuma ocorrência de prazo no período.</Vazio>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Obrigação</TableHead>
+                  <TableHead className="text-right">No prazo</TableHead>
+                  <TableHead className="text-right">Com atraso</TableHead>
+                  <TableHead className="text-right">Não atendidas</TableHead>
+                  <TableHead className="text-right">Pendentes</TableHead>
+                  <TableHead className="text-right">Cumprimento</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {d.prazos.porObrigacao.map((o) => (
+                  <TableRow key={o.nome}>
+                    <TableCell className="font-medium">{o.nome}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {o.cumprimento.atendidos}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {o.cumprimento.atendidosComAtraso}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {o.cumprimento.naoAtendidos}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {o.cumprimento.pendentes}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">
+                      {formatarPercentual(o.cumprimento.percentual)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+      </section>
+
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Bloco rotulo="Demandas abertas" valor={String(d.demandas.abertas)} />
         <Bloco rotulo="Demandas concluídas" valor={String(d.demandas.concluidas)} />
@@ -334,8 +410,7 @@ export default async function PaginaPainel({ searchParams }: Props) {
       </section>
 
       <p className="text-muted-foreground text-xs">
-        Cumprimento de prazos, evolução trimestral e planos de ação entram junto com os
-        módulos das seções 8, 9 e 10.
+        Evolução trimestral e planos de ação entram junto com os módulos das seções 9 e 10.
       </p>
     </>
   );

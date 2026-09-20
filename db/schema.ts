@@ -412,6 +412,15 @@ export const obrigacaoOcorrencias = pgTable(
       t.contratoId,
       t.competencia,
     ),
+    /*
+     * O único acima não impede duplicata quando contrato_id é NULL — que é
+     * justamente o caso de escopo = 'supervisor' —, porque o Postgres trata
+     * NULL como valor distinto. Sem este índice parcial, a rotina de geração
+     * rodando duas vezes criaria a mesma ocorrência duas vezes.
+     */
+    uniqueIndex('obrigacao_ocorrencias_unica_sem_contrato')
+      .on(t.obrigacaoId, t.supervisorId, t.competencia)
+      .where(sql`${t.contratoId} IS NULL`),
   ],
 );
 
