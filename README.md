@@ -71,6 +71,70 @@ npm run dev
 | `npm run db:studio` | abre o Drizzle Studio |
 | `npm run e2e` | roda a bateria de navegador contra o servidor de desenvolvimento |
 
+## Como publicar
+
+O sistema é um Next.js com Postgres: roda em qualquer lugar que sirva Node e
+alcance um banco. Três coisas precisam existir antes do primeiro acesso.
+
+**1. Um Postgres 13 ou mais novo.** Neon, Supabase, RDS ou um Postgres seu — o
+código usa só `gen_random_uuid()`, nativo desde o 13. Com o banco criado,
+aponte `DATABASE_URL` para ele e rode as migrations **uma vez**:
+
+```bash
+npm run db:migrate    # cria as 20 tabelas e os índices
+npm run db:seed       # motivos de cancelamento, obrigações, modelo de avaliação e o admin
+```
+
+O seed é idempotente: rodar de novo não duplica nada, e não troca a senha de
+um admin que já exista.
+
+**2. As variáveis de ambiente**, copiadas de `.env.example`:
+
+| Variável | O que é |
+| --- | --- |
+| `DATABASE_URL` | conexão com o Postgres |
+| `DB_POOL_MAX` / `DB_PREPARE` | `10` / `true` num servidor único; `1` / `false` em serverless, com a URL do pooler |
+| `SESSION_SECRET` | 32+ caracteres, **diferente por ambiente** (`openssl rand -base64 32`) |
+| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_SENHA` | o primeiro usuário; troque a senha no primeiro acesso |
+| `STORAGE_DRIVER` | `s3` em produção — veja abaixo |
+| `S3_*` | bucket, endpoint e credenciais das fotos |
+
+**3. Um bucket para as fotos.** `STORAGE_DRIVER=local` grava em disco e serve
+só para desenvolvimento: em serverless o disco é efêmero, e a evidência da
+visita sumiria junto com a instância. Em produção é `s3`, com R2 ou S3 (veja
+[Armazenamento das evidências](#armazenamento-das-evidências)).
+
+### Em serverless (Vercel e afins)
+
+Importe o repositório, preencha as variáveis acima e publique — não há
+configuração de build especial. Dois cuidados:
+
+- **Use a URL do pooler** do provedor, com `DB_POOL_MAX=1` e
+  `DB_PREPARE=false`. Sem isso, cada instância abre dez conexões e o banco
+  esgota; e o pooler em modo transação não guarda prepared statements entre
+  comandos, o que quebraria a segunda consulta de cada requisição.
+- **`STORAGE_DRIVER=s3` é obrigatório**, pelo motivo do disco efêmero.
+
+As migrations não rodam no build: rode `npm run db:migrate` contra o banco de
+produção antes de publicar uma versão que mude o schema.
+
+### Num servidor seu
+
+```bash
+npm ci && npm run build && npm start
+```
+
+Atrás de um proxy com TLS — o cookie de sessão é `secure` em produção e não
+chega por HTTP puro. `DB_POOL_MAX=10` serve bem. O `STORAGE_DRIVER=local`
+funciona aqui, desde que `STORAGE_LOCAL_DIR` aponte para um volume que
+sobreviva ao deploy; ainda assim o S3 é o desenho do escopo.
+
+### Primeiro acesso
+
+Entre com o admin do seed, troque a senha, cadastre os supervisores e importe
+os contratos pela tela **Importar REG-061**. A partir daí a coordenação monta a
+carteira e o sistema está em operação.
+
 ## Como os testes rodam
 
 As regras de negócio puras (`lib/`) são exercitadas por funções, e o resto é
