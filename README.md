@@ -25,7 +25,8 @@ exportação gerada a partir das visitas.
 | 3 | Montagem da semana, com avisos de periodicidade e envio | pronto |
 | 4 | Meu dia: registro com foto e GPS, cancelamento, visita extra, demandas | pronto |
 | 5 | Painel do coordenador: indicadores, filtros e listas de ação | pronto |
-| 6+ | Exportação REG-061, prazos, avaliações, planos de ação | próximas entregas |
+| 6 | Exportação do REG-061 em Excel e PDF | pronto |
+| 7+ | Prazos (seção 8), avaliações (seção 9), planos de ação (seção 10) | próximas entregas |
 
 As rotas das telas futuras já existem e já respeitam o papel, mas exibem apenas
 um aviso de "próxima entrega".
@@ -75,6 +76,7 @@ npm run dev
     meu-dia/                demandas, visitas do dia, registro e cancelamento
     programacao/            grade da semana, avisos e envio
     painel/                 indicadores, filtros e listas de ação
+    exportar/               geração do REG-061 mensal
     painel  avaliacoes  exportar
     cadastros/
       supervisores/         lista, novo, editar, reset de senha
@@ -97,6 +99,10 @@ npm run dev
   datas.ts                  DATE do Postgres sem deslocar o dia por fuso
   semana.ts                 a semana de segunda a sexta, contada em UTC
   indicadores.ts            as fórmulas da seção 7
+  reg061.ts                 monta a grade mensal a partir das visitas
+  reg061-dados.ts           consulta que alimenta a exportação
+  reg061-excel.ts           geração do .xlsx
+  reg061-pdf.ts             geração do .pdf
   storage.ts                evidências: driver local ou S3 compatível
   storage-local.ts          driver de disco, só para desenvolvimento
   periodicidade.ts          as regras de aviso da seção 4.2
@@ -290,6 +296,47 @@ aparecem sozinhas: sempre acompanham um rótulo em texto, porque cor sozinha nã
 é informação para quem não a distingue.
 
 A mesma informação do gráfico está na tabela ao lado, visita a visita.
+
+## Exportação do REG-061
+
+Escolhe o mês e o supervisor (ou todos, com uma aba para cada) e gera o mesmo
+layout da planilha a partir das visitas. Antes de baixar, a tela mostra o que
+vai sair: quantos contratos entram por supervisor e a contagem de cada
+marcação — assim ninguém baixa um mês vazio sem saber.
+
+**Decisão 13.2, fechada:** a exportação sai **com R, C e E** marcando o
+realizado, além de P/F/S/D do modelo Rev 04.
+
+| Marca | Significado |
+| --- | --- |
+| R | realizada |
+| E | extra |
+| C | cancelada |
+| P | programada |
+| F | feriado |
+| S | sábado |
+| D | domingo |
+
+**A visita vence o calendário.** Se houve visita num sábado ou num feriado, a
+célula mostra a visita, não o S nem o F — o registro precisa mostrar o que
+aconteceu. Entre visitas do mesmo dia a ordem é R > E > C > P: o que aconteceu
+pesa mais do que o que estava previsto.
+
+**Carteira vigente no mês, não hoje.** Entra na planilha o contrato cujo vínculo
+esteve aberto em qualquer dia daquele mês. Um contrato que mudou de carteira em
+outubro continua aparecendo no REG-061 de setembro, com o supervisor que o tinha
+na época.
+
+Pelo mesmo motivo, a exportação não filtra supervisor inativo: o REG-061 é
+registro histórico, e quem trabalhou naquele mês precisa continuar aparecendo
+nele. Numa exportação de "todos", supervisor sem contrato no mês não vira aba
+vazia; pedido pelo nome, ele sai mesmo assim, para o download nunca devolver
+nada sem explicação.
+
+**Formatos.** Excel traz o layout completo, com legenda e bloco de periodicidade
+no canto direito e campos de assinatura. O PDF sai em A4 paisagem — com três
+colunas fixas mais 31 dias, retrato não cabe — quebrando em páginas quando a
+carteira é grande, com as linhas de assinatura no rodapé de cada uma.
 
 ## Armazenamento das evidências
 
