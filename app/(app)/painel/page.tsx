@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -514,7 +515,12 @@ export default async function PaginaPainel({ searchParams }: Props) {
       </section>
 
       <p className="text-muted-foreground text-xs">
-        Evolução trimestral e planos de ação entram junto com os módulos das seções 9 e 10.
+        Todo indicador desta tela é calculado a partir das visitas registradas no período
+        escolhido acima. A evolução trimestral de cada supervisor fica em{' '}
+        <Link href="/avaliacoes" className="underline">
+          Avaliações
+        </Link>
+        .
       </p>
     </>
   );

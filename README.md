@@ -78,16 +78,17 @@ verificado no navegador, contra o Postgres de verdade — nada de mock: a
 pergunta que interessa é se o supervisor consegue fazer o trabalho dele.
 
 ```bash
-npm run dev                 # deixa o servidor de pé, na porta 3280
+npm run dev                 # deixa o servidor de pé
 npm run db:seed             # base limpa, com o admin
 npm run e2e                 # roda as 27 suítes na ordem de dependência
 ```
 
-A bateria vive em `e2e/`. Cada suíte semeia o que precisa e imprime uma linha
-por verificação; o `rodar-tudo.sh` considera uma suíte aprovada quando ela sai
-com código 0 e não imprime nenhuma linha `FALHA`. Para rodar só uma parte:
-`SUITES="planos janela" ./e2e/rodar-tudo.sh`. A porta e o caminho do Chromium
-saem de `E2E_PORTA` e `PLAYWRIGHT_CHROMIUM`.
+A bateria vive em `e2e/`, com o detalhe em [`e2e/LEIAME.md`](e2e/LEIAME.md).
+Cada suíte semeia o que precisa e imprime uma linha por verificação; o
+`rodar-tudo.sh` considera uma suíte aprovada quando ela sai com código 0 e não
+imprime nenhuma linha `FALHA`. Para rodar só uma parte:
+`SUITES="planos janela" ./e2e/rodar-tudo.sh`. A porta (3000 por padrão) e o
+caminho do Chromium saem de `E2E_PORTA` e `PLAYWRIGHT_CHROMIUM`.
 
 Boa parte da bateria não testa a tela, e sim o servidor: várias suítes forjam o
 POST da server action — trocando o contrato, o papel ou a célula — para provar
@@ -113,12 +114,14 @@ que a recusa não depende do botão estar desabilitado.
       feriados/             lista e inclusão
       importacao/           carga inicial a partir do REG-061 em Excel
   sem-acesso                papel não alcança a tela pedida
-  not-found.tsx             404 em português, com a saída certa para cada papel
+  not-found.tsx             404 em português; a de (app) mantém o menu de pé
+  error.tsx                 barreira de erro; idem
   global-error.tsx          erro que derruba o layout raiz (estilo inline)
 /db
   schema.ts                 as 20 tabelas
   migrations/               SQL versionado
-  migrate.ts  seed.ts
+  migrate.ts  seed.ts  seed-avaliacao.ts
+/e2e                        a bateria de navegador (ver e2e/LEIAME.md)
 /lib
   auth.ts                   sessaoAtual, requireSessao, requireRole, autenticar
   sessao.ts                 assinatura e leitura do cookie (roda também no Edge)
@@ -340,7 +343,7 @@ qualquer coisa tira o contrato da conta, em vez de deixá-lo passar como
 cumprido de graça. Esta extensão é interpretação minha — o escopo define o
 esperado por semana, não por período livre.
 
-**Prazos, avaliações e planos** entram no mesmo painel, cada um no seu bloco:
+**Prazos e planos** entram no mesmo painel, cada um no seu bloco:
 cumprimento de prazos e prazos em atraso (seção 8), com a quebra por obrigação;
 e planos de ação (seção 10.4) com abertos, vencidos, tempo médio até resolver,
 contratos reincidentes e as quebras por contrato e por supervisor. O recorte
@@ -484,6 +487,12 @@ reabertura e cancelamento viram linhas em `plano_atualizacoes`, cada uma com
 autor e data. Editar um plano não apaga o que ele dizia antes: grava um
 registro nomeando o que mudou.
 
+**No painel (10.4):** planos em aberto, vencidos, tempo médio até resolver,
+contratos reincidentes, e as quebras por contrato e por supervisor. O recorte é
+a data de abertura, como nas demandas. Plano **cancelado não conta como
+reincidência** — registro retirado não é problema da unidade, e contá-lo faria
+o contrato parecer pior justamente quando alguém teve o cuidado de corrigir.
+
 ## Armazenamento das evidências
 
 A seção 11 define S3 compatível. A decisão 13.3 ficou em **Cloudflare R2**:
@@ -553,10 +562,15 @@ evidência fica, com o histórico da visita intacto.
 | Critério "não se aplica" na avaliação | `avaliacao_notas.nota` aceita `NULL`; `CHECK` só vale para valor preenchido |
 | Modelo de avaliação versionado | `avaliacoes.modelo_id` aponta para a versão usada; finalizada não muda de versão |
 | Histórico do plano de ação é somente-acréscimo | `plano_atualizacoes`, uma linha por evento, com autor e data |
+| O mesmo feriado não entra duas vezes | único em `(data, abrangencia, coalesce(uf,''), coalesce(lower(municipio),''))` |
 
 **Periodicidade gera aviso, nunca bloqueio** — por isso não há restrição de
-periodicidade no banco. O cálculo do esperado entra junto com a tela de
-montagem da semana.
+periodicidade no banco: o esperado é calculado na montagem da semana e vira
+aviso na tela, com a decisão de enviar assim mesmo registrada no envio.
+
+**A trava da sexta também não está no banco.** Ela depende da hora em que a
+gravação acontece, então vive na regra do servidor (`lib/janela.ts`), checada
+em toda gravação de programação — inclusive num POST forjado.
 
 ## As 16 decisões da seção 13
 

@@ -53,6 +53,29 @@ export function CartaoDoPlano({
   const router = useRouter();
   const [painel, setPainel] = useState<Painel>(null);
   const [erro, setErro] = useState<string | null>(null);
+
+  /*
+   * O React limpa o formulário depois de uma server action, inclusive quando
+   * ela recusa. Os campos de texto ficam aqui para que uma recusa não apague
+   * o que a pessoa acabou de escrever.
+   */
+  const [rascunho, setRascunho] = useState({
+    texto: '',
+    descricao: plano.descricao,
+    motivo: '',
+  });
+  const campo = (nome: keyof typeof rascunho) => ({
+    value: rascunho[nome],
+    onChange: (e: { target: { value: string } }) =>
+      setRascunho((r) => ({ ...r, [nome]: e.target.value })),
+  });
+
+  /** Trocar de painel começa do zero: justificar cancelamento não é justificar reabertura. */
+  function alternar(qual: Exclude<Painel, null>) {
+    setErro(null);
+    setRascunho({ texto: '', descricao: plano.descricao, motivo: '' });
+    setPainel(painel === qual ? null : qual);
+  }
   const [enviando, iniciar] = useTransition();
 
   const aberto = estaAberto(plano.status);
@@ -68,6 +91,7 @@ export function CartaoDoPlano({
       }
       setErro(null);
       setPainel(null);
+      setRascunho({ texto: '', descricao: plano.descricao, motivo: '' });
       router.refresh();
     });
 
@@ -169,28 +193,28 @@ export function CartaoDoPlano({
           <>
             <Button
               size="sm"
-              onClick={() => setPainel(painel === 'acompanhar' ? null : 'acompanhar')}
+              onClick={() => alternar('acompanhar')}
             >
               Acompanhar
             </Button>
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setPainel(painel === 'editar' ? null : 'editar')}
+              onClick={() => alternar('editar')}
             >
               Editar
             </Button>
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setPainel(painel === 'resolver' ? null : 'resolver')}
+              onClick={() => alternar('resolver')}
             >
               Resolver
             </Button>
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => setPainel(painel === 'cancelar' ? null : 'cancelar')}
+              onClick={() => alternar('cancelar')}
             >
               Cancelar
             </Button>
@@ -199,7 +223,7 @@ export function CartaoDoPlano({
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setPainel(painel === 'reabrir' ? null : 'reabrir')}
+            onClick={() => alternar('reabrir')}
           >
             Reabrir
           </Button>
@@ -225,7 +249,7 @@ export function CartaoDoPlano({
             <Label htmlFor={`t-${plano.id}`} className="mb-2">
               O que houve
             </Label>
-            <Textarea id={`t-${plano.id}`} name="texto" rows={2} required />
+            <Textarea id={`t-${plano.id}`} name="texto" rows={2} required {...campo('texto')} />
           </div>
           <div>
             <Label htmlFor={`f-${plano.id}`} className="mb-2">
@@ -262,8 +286,8 @@ export function CartaoDoPlano({
               id={`d-${plano.id}`}
               name="descricao"
               rows={2}
-              defaultValue={plano.descricao}
               required
+              {...campo('descricao')}
             />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -347,7 +371,7 @@ export function CartaoDoPlano({
             <Label htmlFor={`cm-${plano.id}`} className="mb-2">
               Por que está sendo cancelado
             </Label>
-            <Textarea id={`cm-${plano.id}`} name="motivo" rows={2} required />
+            <Textarea id={`cm-${plano.id}`} name="motivo" rows={2} required {...campo('motivo')} />
           </div>
           <div>
             <Button type="submit" variant="destructive" disabled={enviando}>
@@ -366,7 +390,7 @@ export function CartaoDoPlano({
             <Label htmlFor={`rm-${plano.id}`} className="mb-2">
               Por que está sendo reaberto
             </Label>
-            <Textarea id={`rm-${plano.id}`} name="motivo" rows={2} required />
+            <Textarea id={`rm-${plano.id}`} name="motivo" rows={2} required {...campo('motivo')} />
           </div>
           <div>
             <Button type="submit" disabled={enviando}>

@@ -22,11 +22,18 @@ export default async function PaginaProgramacao({ searchParams }: Props) {
   const dados = await carregarSemana(alvo, supervisor ?? null);
   const supervisores = await supervisoresSelecionaveis();
 
+  // A instrução só vale enquanto a grade aceita clique.
+  const editavel =
+    dados.status === 'rascunho' && (dados.janela !== 'fechada' || sessao.papel !== 'supervisor');
+
   return (
     <>
       <CabecalhoPagina
         titulo="Programação da semana"
-        descricao={`${rotuloSemana(dados.semana)} — ${dados.supervisorNome}. Clique na célula para marcar ou desmarcar a visita.`}
+        descricao={
+          `${rotuloSemana(dados.semana)} — ${dados.supervisorNome}.` +
+          (editavel ? ' Clique na célula para marcar ou desmarcar a visita.' : '')
+        }
       />
       <Grade
         dados={dados}
