@@ -4,6 +4,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { hashSenha } from '../lib/senha';
 import { motivosCancelamento, obrigacoes, usuarios } from './schema';
+import { semearModeloAvaliacao } from './seed-avaliacao';
 
 /**
  * Lista fechada da seção 4.3 do escopo. Fica em tabela, e não em código, para a
@@ -132,6 +133,14 @@ async function main() {
     } else {
       console.log('Obrigações já cadastradas — nada a fazer.');
     }
+
+    // Modelo da avaliação trimestral -------------------------------------------
+    const criouModelo = await semearModeloAvaliacao(db);
+    console.log(
+      criouModelo
+        ? 'Modelo de avaliação REV 00 criado.'
+        : 'Modelo de avaliação já existe — nada a fazer.',
+    );
 
     // Usuário admin ------------------------------------------------------------
     const nome = process.env.SEED_ADMIN_NOME ?? 'Administrador';
