@@ -73,67 +73,77 @@ npm run dev
 
 ## Como publicar
 
-O sistema é um Next.js com Postgres: roda em qualquer lugar que sirva Node e
-alcance um banco. Três coisas precisam existir antes do primeiro acesso.
+O sistema é um Next.js com Postgres. Ele deduz sozinho o que dá para deduzir,
+então sobram poucas variáveis de ambiente:
 
-**1. Um Postgres 13 ou mais novo.** Neon, Supabase, RDS ou um Postgres seu — o
-código usa só `gen_random_uuid()`, nativo desde o 13. Com o banco criado,
-aponte `DATABASE_URL` para ele e rode as migrations **uma vez**:
+| Variável | Obrigatória | O que é |
+| --- | --- | --- |
+| `DATABASE_URL` | sim | conexão com o Postgres |
+| `SESSION_SECRET` | sim | 32+ caracteres, **diferente por ambiente** (`openssl rand -base64 32`) |
+| `S3_BUCKET` | em produção | o bucket das fotos — preenchê-lo já liga o armazenamento em nuvem |
+| `S3_ENDPOINT` | com R2 ou Supabase | endereço do provedor; vazio usa a AWS |
+| `S3_REGION` | com Supabase | a região do projeto; o padrão `auto` serve para R2 |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | com bucket | as chaves do bucket |
+
+**O que o sistema deduz.** O tamanho do pool e os prepared statements saem da
+própria `DATABASE_URL`: uma URL de *pooler* atende serverless, onde cada
+instância abriria o próprio pool, então vale uma conexão e nada de prepared
+statements — o pooler em modo transação não os guarda entre comandos.
+`DB_POOL_MAX` e `DB_PREPARE` existem para contrariar a dedução, não para o uso
+normal. E ter `S3_BUCKET` preenchido é o que escolhe o armazenamento em nuvem:
+antes era preciso lembrar de `STORAGE_DRIVER=s3` *além* das chaves, e esquecer
+disso num servidor de disco efêmero fazia a foto sumir com a instância, sem
+erro nenhum.
+
+### Os três passos
+
+**1. Um Postgres 13 ou mais novo.** Com o banco criado e a `DATABASE_URL`
+apontando para ele:
 
 ```bash
 npm run db:migrate    # cria as 20 tabelas e os índices
-npm run db:seed       # motivos de cancelamento, obrigações, modelo de avaliação e o admin
+npm run db:seed       # motivos, obrigações, modelo de avaliação e o admin
 ```
 
-O seed é idempotente: rodar de novo não duplica nada, e não troca a senha de
-um admin que já exista.
+O seed é idempotente e não troca a senha de um admin que já exista.
 
-**2. As variáveis de ambiente**, copiadas de `.env.example`:
+**2. Um bucket para as fotos.** Em disco efêmero a evidência da visita sumiria
+junto com a instância, então em produção é S3, R2 ou o Storage do Supabase —
+os três falam o mesmo protocolo. O bucket é **privado**: a foto mostra o
+interior da unidade do cliente e é servida por rota autenticada.
 
-| Variável | O que é |
-| --- | --- |
-| `DATABASE_URL` | conexão com o Postgres |
-| `DB_POOL_MAX` / `DB_PREPARE` | `10` / `true` num servidor único; `1` / `false` em serverless, com a URL do pooler |
-| `SESSION_SECRET` | 32+ caracteres, **diferente por ambiente** (`openssl rand -base64 32`) |
-| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_SENHA` | o primeiro usuário; troque a senha no primeiro acesso |
-| `STORAGE_DRIVER` | `s3` em produção — veja abaixo |
-| `S3_*` | bucket, endpoint e credenciais das fotos |
+**3. Um lugar que sirva Node.** Numa plataforma serverless basta importar o
+repositório e colar as variáveis; num servidor seu, `npm ci && npm run build &&
+npm start` atrás de um proxy com TLS — o cookie de sessão é `secure` e não
+chega por HTTP puro.
 
-**3. Um bucket para as fotos.** `STORAGE_DRIVER=local` grava em disco e serve
-só para desenvolvimento: em serverless o disco é efêmero, e a evidência da
-visita sumiria junto com a instância. Em produção é `s3`, com R2 ou S3 (veja
-[Armazenamento das evidências](#armazenamento-das-evidências)).
+### Quem entra
 
-### Em serverless (Vercel e afins)
-
-Importe o repositório, preencha as variáveis acima e publique — não há
-configuração de build especial. Dois cuidados:
-
-- **Use a URL do pooler** do provedor, com `DB_POOL_MAX=1` e
-  `DB_PREPARE=false`. Sem isso, cada instância abre dez conexões e o banco
-  esgota; e o pooler em modo transação não guarda prepared statements entre
-  comandos, o que quebraria a segunda consulta de cada requisição.
-- **`STORAGE_DRIVER=s3` é obrigatório**, pelo motivo do disco efêmero.
-
-As migrations não rodam no build: rode `npm run db:migrate` contra o banco de
-produção antes de publicar uma versão que mude o schema.
-
-### Num servidor seu
-
-```bash
-npm ci && npm run build && npm start
-```
-
-Atrás de um proxy com TLS — o cookie de sessão é `secure` em produção e não
-chega por HTTP puro. `DB_POOL_MAX=10` serve bem. O `STORAGE_DRIVER=local`
-funciona aqui, desde que `STORAGE_LOCAL_DIR` aponte para um volume que
-sobreviva ao deploy; ainda assim o S3 é o desenho do escopo.
-
-### Primeiro acesso
+O endereço é público, mas **toda página exige sessão**: sem login, o acesso
+para no `/login`. Só entra quem o administrador cadastrar, e cada pessoa
+enxerga conforme o papel. Não há cadastro aberto nem convite por link.
 
 Entre com o admin do seed, troque a senha, cadastre os supervisores e importe
-os contratos pela tela **Importar REG-061**. A partir daí a coordenação monta a
-carteira e o sistema está em operação.
+os contratos pela tela **Importar REG-061**.
+
+### Se o banco for do Supabase
+
+Duas coisas a mais, porque o Supabase publica o schema `public` numa API REST
+que este sistema não usa — ele fala direto com o Postgres:
+
+```sql
+-- RLS ligada e sem política nenhuma: ninguém passa pela API REST.
+-- O app conecta como dono das tabelas, que não é afetado.
+DO $$ DECLARE t text; BEGIN
+  FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+  LOOP EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t); END LOOP;
+END $$;
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
+REVOKE USAGE ON SCHEMA public FROM anon, authenticated;
+```
+
+E use a connection string do **pooler de transação**, que o sistema reconhece
+sozinho.
 
 ## Como os testes rodam
 

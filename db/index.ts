@@ -7,18 +7,23 @@ if (!process.env.DATABASE_URL) {
 }
 
 /**
- * O tamanho do pool depende de onde o sistema roda:
+ * O jeito certo de abrir o pool depende de onde o sistema roda, e a própria
+ * URL diz isso: uma URL de pooler (pgBouncer do Supabase ou do Neon) atende
+ * serverless, onde cada instância abriria o próprio pool e esgotaria o banco.
+ * Nesse caso é uma conexão por instância, e sem prepared statements — o pooler
+ * em modo transação não os guarda entre comandos, e o segundo comando de cada
+ * requisição falharia com "prepared statement does not exist".
  *
- * - servidor único (VPS, container): um pool de 10 é saudável.
- * - serverless (Vercel, Lambda): cada instância abre o próprio pool, então
- *   `DB_POOL_MAX=1` com uma URL de pooler (pgBouncer do Neon ou do Supabase).
- *
- * O pooler em modo transação não guarda prepared statements entre comandos, e
- * o driver precisa saber disso — daí `DB_PREPARE=false`. Sem isso o segundo
- * comando de uma requisição falha com "prepared statement does not exist".
+ * Deduzir evita a configuração errada e silenciosa. `DB_POOL_MAX` e
+ * `DB_PREPARE` continuam existindo para quem precisar contrariar a dedução.
  */
-const maximoDeConexoes = Number(process.env.DB_POOL_MAX ?? 10);
-const usaPrepared = process.env.DB_PREPARE !== 'false';
+function ehPooler(url: string): boolean {
+  return /pooler\.|pgbouncer|:6543\//.test(url);
+}
+
+const pooler = ehPooler(process.env.DATABASE_URL);
+const maximoDeConexoes = Number(process.env.DB_POOL_MAX ?? (pooler ? 1 : 10));
+const usaPrepared = (process.env.DB_PREPARE ?? String(!pooler)) !== 'false';
 
 /**
  * Em desenvolvimento o Next recarrega os módulos a cada alteração. Sem o cache

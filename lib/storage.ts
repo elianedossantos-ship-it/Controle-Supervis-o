@@ -4,15 +4,21 @@ import { createHash, randomUUID } from 'node:crypto';
 /**
  * Armazenamento das evidências de visita.
  *
- * A seção 11 define "S3 compatível". Qual provedor (Cloudflare R2 ou AWS S3)
- * é a decisão 13.3, ainda aberta — mas os dois falam o mesmo protocolo, então
- * a escolha é configuração, não código. O driver `local` existe para rodar em
- * desenvolvimento sem depender de bucket nenhum.
+ * A seção 11 define "S3 compatível", e R2, S3 e o Storage do Supabase falam o
+ * mesmo protocolo — a escolha do provedor é configuração, não código. O driver
+ * `local` existe para rodar em desenvolvimento sem depender de bucket nenhum.
+ *
+ * Ter bucket configurado é o que decide: quem preencheu `S3_BUCKET` quer o
+ * bucket. Antes era preciso lembrar de `STORAGE_DRIVER=s3` além das chaves, e
+ * esquecer disso num servidor de disco efêmero gravava a foto num lugar que
+ * some com a instância — a evidência da visita desaparecia sem erro nenhum.
  */
 export type Driver = 'local' | 's3';
 
 export function driverAtual(): Driver {
-  return process.env.STORAGE_DRIVER === 's3' ? 's3' : 'local';
+  const escolhido = process.env.STORAGE_DRIVER;
+  if (escolhido === 's3' || escolhido === 'local') return escolhido;
+  return process.env.S3_BUCKET ? 's3' : 'local';
 }
 
 /** Tipos aceitos: a evidência é foto tirada na hora pela câmera do celular. */
